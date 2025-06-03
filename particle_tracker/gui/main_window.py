@@ -102,6 +102,7 @@ class MainWindow(QMainWindow):
         # Initialize UI
         self._setup_ui()
         self._connect_signals()
+        self._setup_default_parameters()  # Add this line
         self._restore_settings()
 
         self.logger.info("Main window initialized")
@@ -148,6 +149,122 @@ class MainWindow(QMainWindow):
 
         # Create dock widgets
         self._create_dock_widgets()
+
+
+    def _create_menu_bar(self):
+        """Create the menu bar."""
+        menubar = self.menuBar()
+
+        # File menu
+        file_menu = menubar.addMenu("File")
+
+        # Open actions
+        open_image_action = QAction("Open Image...", self)
+        open_image_action.triggered.connect(self._open_image_file)
+        file_menu.addAction(open_image_action)
+
+        open_data_action = QAction("Open Data...", self)
+        open_data_action.triggered.connect(self._open_data_file)
+        file_menu.addAction(open_data_action)
+
+        file_menu.addSeparator()
+
+        # Project actions
+        new_project_action = QAction("New Project", self)
+        new_project_action.triggered.connect(self._new_project)
+        file_menu.addAction(new_project_action)
+
+        open_project_action = QAction("Open Project...", self)
+        open_project_action.triggered.connect(self._open_project)
+        file_menu.addAction(open_project_action)
+
+        save_project_action = QAction("Save Project", self)
+        save_project_action.triggered.connect(self._save_project)
+        file_menu.addAction(save_project_action)
+
+        file_menu.addSeparator()
+
+        # Exit action
+        exit_action = QAction("Exit", self)
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+
+        # Analysis menu
+        analysis_menu = menubar.addMenu("Analysis")
+
+        detect_action = QAction("Detect Particles", self)
+        detect_action.triggered.connect(self._run_detection)
+        analysis_menu.addAction(detect_action)
+
+        link_action = QAction("Link Trajectories", self)
+        link_action.triggered.connect(self._run_linking)
+        analysis_menu.addAction(link_action)
+
+        features_action = QAction("Calculate Features", self)
+        features_action.triggered.connect(self._run_features)
+        analysis_menu.addAction(features_action)
+
+        classify_action = QAction("Classify Trajectories", self)
+        classify_action.triggered.connect(self._run_classification)
+        analysis_menu.addAction(classify_action)
+
+        analysis_menu.addSeparator()
+
+        full_pipeline_action = QAction("Run Full Pipeline", self)
+        full_pipeline_action.triggered.connect(self._run_full_pipeline)
+        analysis_menu.addAction(full_pipeline_action)
+
+        # Tools menu (NEW)
+        tools_menu = menubar.addMenu("Tools")
+
+        refresh_training_data_action = QAction("Refresh Training Data Path", self)
+        refresh_training_data_action.triggered.connect(self._refresh_training_data)
+        tools_menu.addAction(refresh_training_data_action)
+
+        # View menu
+        view_menu = menubar.addMenu("View")
+
+        # Dock widget toggles will be added here
+
+        # Help menu
+        help_menu = menubar.addMenu("Help")
+
+        about_action = QAction("About", self)
+        about_action.triggered.connect(self._show_about)
+        help_menu.addAction(about_action)
+
+    def _refresh_training_data(self):
+        """Refresh the training data path."""
+        try:
+            new_path = self.config.refresh_training_data_path()
+            if new_path:
+                # Update parameter manager
+                current_params = self.parameter_manager.get_all_parameters()
+                if isinstance(current_params, dict):
+                    current_params['svm_training_data'] = new_path
+                else:
+                    from dataclasses import asdict
+                    current_params = asdict(current_params)
+                    current_params['svm_training_data'] = new_path
+
+                self.parameter_manager.set_all_parameters(current_params)
+
+                QMessageBox.information(
+                    self, "Training Data Updated",
+                    f"SVM training data path updated to:\n{new_path}"
+                )
+            else:
+                QMessageBox.warning(
+                    self, "Training Data Not Found",
+                    "Could not find default SVM training data.\n"
+                    "Please manually browse for the training data file."
+                )
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Error",
+                f"Error refreshing training data path:\n{e}"
+            )
+
 
     def _create_left_panel(self) -> QWidget:
         """Create the left control panel."""
@@ -421,6 +538,33 @@ class MainWindow(QMainWindow):
         self.analysis_engine.stop_analysis()
 
         event.accept()
+
+    def _setup_default_parameters(self):
+        """Setup default parameters including training data path."""
+        try:
+            # Get default training data path from config
+            default_training_data = self.config.get_default_svm_training_data()
+
+            if not default_training_data:
+                # Try to refresh/auto-detect
+                default_training_data = self.config.refresh_training_data_path()
+
+            if default_training_data:
+                # Update parameter manager with default training data
+                current_params = self.parameter_manager.get_all_parameters()
+                if isinstance(current_params, dict):
+                    current_params['svm_training_data'] = default_training_data
+                else:
+                    # If it's an AnalysisParameters object, convert to dict and update
+                    from dataclasses import asdict
+                    current_params = asdict(current_params)
+                    current_params['svm_training_data'] = default_training_data
+
+                self.parameter_manager.set_all_parameters(current_params)
+                self.logger.info(f"Set default SVM training data: {default_training_data}")
+
+        except Exception as e:
+            self.logger.warning(f"Error setting up default training data: {e}")
 
     # File operations
     def _open_image_file(self):

@@ -39,7 +39,11 @@ class ApplicationConfig:
     default_pixel_size: float = 108.0
     default_frame_rate: float = 10.0
     default_detection_method: str = "threshold"
-    default_linking_method: str = "nearest_neighbor"
+    default_linking_method: str = "trackpy"  # Updated default
+
+    # SVM Training data
+    default_svm_training_data: str = ""  # Will be auto-populated
+    svm_auto_detect: bool = True  # Whether to auto-detect training data on startup
 
     # UI settings
     window_geometry: str = ""
@@ -57,6 +61,7 @@ class ApplicationConfig:
             self.recent_files = []
         if self.recent_projects is None:
             self.recent_projects = []
+
 
 
 class ConfigManager(QObject):
@@ -80,7 +85,7 @@ class ConfigManager(QObject):
         self.logger.info("Configuration manager initialized")
 
     def _load_config(self) -> ApplicationConfig:
-        """Load configuration from file."""
+        """Load configuration from file with auto-detection of training data."""
 
         if self.config_file.exists():
             try:
@@ -90,13 +95,30 @@ class ConfigManager(QObject):
                 # Create config object
                 config = ApplicationConfig(**config_dict)
                 self.logger.info(f"Configuration loaded from {self.config_file}")
-                return config
 
             except Exception as e:
                 self.logger.warning(f"Error loading config: {e}, using defaults")
+                config = ApplicationConfig()
+        else:
+            # Return default configuration
+            config = ApplicationConfig()
 
-        # Return default configuration
-        return ApplicationConfig()
+        # Auto-detect training data if enabled and not already set
+        if config.svm_auto_detect and not config.default_svm_training_data:
+            try:
+                from particle_tracker.utils.path_utils import get_default_training_data_path
+                default_path = get_default_training_data_path()
+                if default_path:
+                    config.default_svm_training_data = default_path
+                    self.logger.info(f"Auto-detected SVM training data: {default_path}")
+                    # Save the updated config
+                    self.config = config
+                    self.save_config()
+            except Exception as e:
+                self.logger.debug(f"Could not auto-detect training data: {e}")
+
+        return config
+
 
     def save_config(self):
         """Save current configuration to file."""
@@ -165,3 +187,25 @@ class ConfigManager(QObject):
         """Get list of recent projects (existing only)."""
         return [p for p in self.config.recent_projects if Path(p).exists()]
 
+    def get_default_svm_training_data(self) -> str:
+        """Get the default SVM training data path."""
+        return self.config.default_svm_training_data
+
+    def set_default_svm_training_data(self, path: str):
+        """Set the default SVM training data path."""
+        self.config.default_svm_training_data = path
+        self.save_config()
+        self.configChanged.emit('default_svm_training_data', path)
+
+    def refresh_training_data_path(self):
+        """Refresh the training data path by re-running auto-detection."""
+        try:
+            from particle_tracker.utils.path_utils import get_default_training_data_path
+            new_path = get_default_training_data_path()
+            if new_path and new_path != self.config.default_svm_training_data:
+                self.set_default_svm_training_data(new_path)
+                self.logger.info(f"Updated SVM training data path: {new_path}")
+                return new_path
+        except Exception as e:
+            self.logger.warning(f"Error refreshing training data path: {e}")
+        return self.config.default_svm_training_data

@@ -1,7 +1,3 @@
-# ============================================================================
-# README.MD
-# ============================================================================
-
 # Particle Tracking Application
 
 A comprehensive, modular application for analyzing particle trajectories from TIRF microscopy recordings and other single-molecule imaging data.

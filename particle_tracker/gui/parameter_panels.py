@@ -205,7 +205,7 @@ class DetectionParametersWidget(ParameterWidget):
 
 
 class LinkingParametersWidget(ParameterWidget):
-    """Widget for particle linking parameters."""
+    """Widget for particle linking parameters with smart defaults."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -218,26 +218,37 @@ class LinkingParametersWidget(ParameterWidget):
         # Linking method
         self.method_combo = QComboBox()
         self.method_combo.addItems([
-            "nearest_neighbor", "trackpy"
+            "trackpy", "nearest_neighbor"
         ])
-        self.method_combo.setCurrentText("nearest_neighbor")
+        self.method_combo.setCurrentText("trackpy")  # Default to trackpy
+        self.method_combo.currentTextChanged.connect(self._on_method_changed)
         self.method_combo.currentTextChanged.connect(self.valueChanged)
         layout.addRow("Linking Method:", self.method_combo)
 
-        # Maximum distance
+        # Add help text
+        help_label = QLabel("💡 Use 'trackpy' for trackpy detection, 'nearest_neighbor' for others")
+        help_label.setStyleSheet("QLabel { color: gray; font-size: 9px; }")
+        layout.addRow("", help_label)
+
+        # Maximum distance (search range)
         self.max_distance_spin = QDoubleSpinBox()
-        self.max_distance_spin.setRange(0.1, 100.0)
+        self.max_distance_spin.setRange(0.1, 20.0)
         self.max_distance_spin.setSingleStep(0.1)
-        self.max_distance_spin.setValue(5.0)
+        self.max_distance_spin.setValue(2.0)  # Smaller default for trackpy
         self.max_distance_spin.setDecimals(2)
         self.max_distance_spin.setSuffix(" pixels")
         self.max_distance_spin.valueChanged.connect(self.valueChanged)
         layout.addRow("Max Distance:", self.max_distance_spin)
 
-        # Maximum gap frames
+        # Distance guidance
+        distance_help = QLabel("🎯 Start with 1-3 pixels for dense data, 3-5 for sparse")
+        distance_help.setStyleSheet("QLabel { color: gray; font-size: 9px; }")
+        layout.addRow("", distance_help)
+
+        # Maximum gap frames (memory)
         self.max_gap_spin = QSpinBox()
-        self.max_gap_spin.setRange(0, 50)
-        self.max_gap_spin.setValue(2)
+        self.max_gap_spin.setRange(0, 10)
+        self.max_gap_spin.setValue(1)  # Smaller default
         self.max_gap_spin.setSuffix(" frames")
         self.max_gap_spin.valueChanged.connect(self.valueChanged)
         layout.addRow("Max Gap Frames:", self.max_gap_spin)
@@ -245,18 +256,100 @@ class LinkingParametersWidget(ParameterWidget):
         # Minimum track length
         self.min_length_spin = QSpinBox()
         self.min_length_spin.setRange(2, 1000)
-        self.min_length_spin.setValue(3)
+        self.min_length_spin.setValue(5)  # Higher default to filter noise
         self.min_length_spin.setSuffix(" points")
         self.min_length_spin.valueChanged.connect(self.valueChanged)
         layout.addRow("Min Track Length:", self.min_length_spin)
 
-        # Maximum track length
-        self.max_length_spin = QSpinBox()
-        self.max_length_spin.setRange(10, 10000)
-        self.max_length_spin.setValue(1000)
-        self.max_length_spin.setSuffix(" points")
-        self.max_length_spin.valueChanged.connect(self.valueChanged)
-        layout.addRow("Max Track Length:", self.max_length_spin)
+        # Advanced options (collapsible)
+        self.advanced_group = QGroupBox("Advanced Options")
+        self.advanced_group.setCheckable(True)
+        self.advanced_group.setChecked(False)
+        advanced_layout = QFormLayout(self.advanced_group)
+
+        # Adaptive parameters for trackpy
+        self.adaptive_cb = QCheckBox("Adaptive Search")
+        self.adaptive_cb.setChecked(True)
+        self.adaptive_cb.setToolTip("Automatically reduce search range if linking becomes too complex")
+        self.adaptive_cb.toggled.connect(self.valueChanged)
+        advanced_layout.addRow("", self.adaptive_cb)
+
+        # Link strategy
+        self.strategy_combo = QComboBox()
+        self.strategy_combo.addItems([
+            "auto", "numba", "recursive", "nonrecursive"
+        ])
+        self.strategy_combo.setCurrentText("auto")
+        self.strategy_combo.currentTextChanged.connect(self.valueChanged)
+        advanced_layout.addRow("Link Strategy:", self.strategy_combo)
+
+        layout.addRow(self.advanced_group)
+
+        # Preset buttons
+        preset_layout = QHBoxLayout()
+
+        self.dense_preset_btn = QPushButton("Dense Data")
+        self.dense_preset_btn.setToolTip("Settings for high particle density")
+        self.dense_preset_btn.clicked.connect(self._apply_dense_preset)
+        preset_layout.addWidget(self.dense_preset_btn)
+
+        self.sparse_preset_btn = QPushButton("Sparse Data")
+        self.sparse_preset_btn.setToolTip("Settings for low particle density")
+        self.sparse_preset_btn.clicked.connect(self._apply_sparse_preset)
+        preset_layout.addWidget(self.sparse_preset_btn)
+
+        self.fast_preset_btn = QPushButton("Fast Motion")
+        self.fast_preset_btn.setToolTip("Settings for fast-moving particles")
+        self.fast_preset_btn.clicked.connect(self._apply_fast_preset)
+        preset_layout.addWidget(self.fast_preset_btn)
+
+        layout.addRow("Presets:", preset_layout)
+
+        # Initialize with trackpy settings
+        self._on_method_changed("trackpy")
+
+    def _on_method_changed(self, method: str):
+        """Handle linking method change and adjust defaults."""
+        if method == "trackpy":
+            # Trackpy-optimized defaults
+            self.max_distance_spin.setValue(2.0)
+            self.max_gap_spin.setValue(1)
+            self.min_length_spin.setValue(5)
+            self.strategy_combo.setEnabled(True)
+            self.adaptive_cb.setEnabled(True)
+        else:
+            # Nearest neighbor defaults
+            self.max_distance_spin.setValue(5.0)
+            self.max_gap_spin.setValue(2)
+            self.min_length_spin.setValue(3)
+            self.strategy_combo.setEnabled(False)
+            self.adaptive_cb.setEnabled(False)
+
+    def _apply_dense_preset(self):
+        """Apply settings for dense particle data."""
+        self.method_combo.setCurrentText("trackpy")
+        self.max_distance_spin.setValue(1.5)
+        self.max_gap_spin.setValue(0)
+        self.min_length_spin.setValue(10)
+        self.adaptive_cb.setChecked(True)
+        self.valueChanged.emit()
+
+    def _apply_sparse_preset(self):
+        """Apply settings for sparse particle data."""
+        self.method_combo.setCurrentText("nearest_neighbor")
+        self.max_distance_spin.setValue(7.0)
+        self.max_gap_spin.setValue(3)
+        self.min_length_spin.setValue(3)
+        self.valueChanged.emit()
+
+    def _apply_fast_preset(self):
+        """Apply settings for fast-moving particles."""
+        self.method_combo.setCurrentText("trackpy")
+        self.max_distance_spin.setValue(4.0)
+        self.max_gap_spin.setValue(2)
+        self.min_length_spin.setValue(5)
+        self.adaptive_cb.setChecked(True)
+        self.valueChanged.emit()
 
     def get_value(self) -> Dict[str, Any]:
         """Get linking parameters."""
@@ -265,7 +358,8 @@ class LinkingParametersWidget(ParameterWidget):
             'max_distance': self.max_distance_spin.value(),
             'max_gap_frames': self.max_gap_spin.value(),
             'min_track_length': self.min_length_spin.value(),
-            'max_track_length': self.max_length_spin.value()
+            'adaptive_search': self.adaptive_cb.isChecked(),
+            'link_strategy': self.strategy_combo.currentText()
         }
 
     def set_value(self, params: Dict[str, Any]):
@@ -278,8 +372,10 @@ class LinkingParametersWidget(ParameterWidget):
             self.max_gap_spin.setValue(params['max_gap_frames'])
         if 'min_track_length' in params:
             self.min_length_spin.setValue(params['min_track_length'])
-        if 'max_track_length' in params:
-            self.max_length_spin.setValue(params['max_track_length'])
+        if 'adaptive_search' in params:
+            self.adaptive_cb.setChecked(params['adaptive_search'])
+        if 'link_strategy' in params:
+            self.strategy_combo.setCurrentText(params['link_strategy'])
 
 
 class FeatureParametersWidget(ParameterWidget):
@@ -394,12 +490,14 @@ class FeatureParametersWidget(ParameterWidget):
             self.mobility_threshold_spin.setValue(params['mobility_threshold'])
 
 
+
 class ClassificationParametersWidget(ParameterWidget):
-    """Widget for classification parameters."""
+    """Widget for classification parameters with auto-populated training data path."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._setup_ui()
+        self._auto_populate_training_data()
 
     def _setup_ui(self):
         """Setup the user interface."""
@@ -423,9 +521,20 @@ class ClassificationParametersWidget(ParameterWidget):
         self.browse_button = QPushButton("Browse...")
         self.browse_button.clicked.connect(self._browse_training_data)
 
+        # Add auto-detect button
+        self.auto_detect_button = QPushButton("🔍 Auto-Detect")
+        self.auto_detect_button.setToolTip("Automatically find default training data")
+        self.auto_detect_button.clicked.connect(self._auto_populate_training_data)
+
         svm_layout.addWidget(self.training_data_edit)
         svm_layout.addWidget(self.browse_button)
+        svm_layout.addWidget(self.auto_detect_button)
         layout.addRow("Training Data:", svm_layout)
+
+        # Status indicator for training data
+        self.training_status_label = QLabel()
+        self.training_status_label.setStyleSheet("QLabel { font-size: 9px; }")
+        layout.addRow("", self.training_status_label)
 
         # SVM features
         features_group = QGroupBox("SVM Features")
@@ -476,28 +585,100 @@ class ClassificationParametersWidget(ParameterWidget):
         # Initialize visibility
         self._on_method_changed("svm")
 
+    def _auto_populate_training_data(self):
+        """Auto-populate the training data path if available."""
+        try:
+            # Import path utilities
+            from particle_tracker.utils.path_utils import get_default_training_data_path
+
+            default_path = get_default_training_data_path()
+            if default_path:
+                self.training_data_edit.setText(default_path)
+                self.training_status_label.setText("✅ Default training data found")
+                self.training_status_label.setStyleSheet("QLabel { color: green; font-size: 9px; }")
+                self.logger.info(f"Auto-populated training data path: {default_path}")
+            else:
+                self.training_status_label.setText("⚠️ Default training data not found")
+                self.training_status_label.setStyleSheet("QLabel { color: orange; font-size: 9px; }")
+
+        except ImportError:
+            # Fallback if path_utils not available
+            self.training_status_label.setText("ℹ️ Auto-detection not available")
+            self.training_status_label.setStyleSheet("QLabel { color: gray; font-size: 9px; }")
+        except Exception as e:
+            self.logger.warning(f"Error auto-populating training data: {e}")
+            self.training_status_label.setText("❌ Auto-detection failed")
+            self.training_status_label.setStyleSheet("QLabel { color: red; font-size: 9px; }")
+
+    def _validate_training_data_path(self, path: str):
+        """Validate the training data path and update status."""
+        if not path:
+            self.training_status_label.setText("")
+            return
+
+        from pathlib import Path
+
+        if Path(path).exists():
+            try:
+                # Try to load and validate the CSV
+                import pandas as pd
+                df = pd.read_csv(path, nrows=5)  # Just check first few rows
+
+                # Check for required columns
+                required_columns = ['Elected_Label']
+                if all(col in df.columns for col in required_columns):
+                    self.training_status_label.setText("✅ Valid training data")
+                    self.training_status_label.setStyleSheet("QLabel { color: green; font-size: 9px; }")
+                else:
+                    self.training_status_label.setText("⚠️ Missing required columns")
+                    self.training_status_label.setStyleSheet("QLabel { color: orange; font-size: 9px; }")
+
+            except Exception as e:
+                self.training_status_label.setText("❌ Invalid CSV format")
+                self.training_status_label.setStyleSheet("QLabel { color: red; font-size: 9px; }")
+        else:
+            self.training_status_label.setText("❌ File not found")
+            self.training_status_label.setStyleSheet("QLabel { color: red; font-size: 9px; }")
+
     def _on_method_changed(self, method: str):
         """Handle classification method change."""
         # Show/hide relevant parameter groups
         if method == "svm":
             self.training_data_edit.setEnabled(True)
             self.browse_button.setEnabled(True)
+            self.auto_detect_button.setEnabled(True)
             self.feature_list.setEnabled(True)
             self.threshold_params_group.setVisible(False)
+
+            # Validate current path
+            current_path = self.training_data_edit.text()
+            if current_path:
+                self._validate_training_data_path(current_path)
+
         elif method == "threshold":
             self.training_data_edit.setEnabled(False)
             self.browse_button.setEnabled(False)
+            self.auto_detect_button.setEnabled(False)
             self.feature_list.setEnabled(False)
             self.threshold_params_group.setVisible(True)
+            self.training_status_label.setText("")
 
     def _browse_training_data(self):
         """Browse for training data file."""
+        # Start from training data directory if it exists
+        try:
+            from particle_tracker.utils.path_utils import get_training_data_directory
+            start_dir = str(get_training_data_directory())
+        except:
+            start_dir = ""
+
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Select Training Data", "",
+            self, "Select Training Data", start_dir,
             "CSV Files (*.csv);;All Files (*)"
         )
         if file_path:
             self.training_data_edit.setText(file_path)
+            self._validate_training_data_path(file_path)
 
     def get_value(self) -> Dict[str, Any]:
         """Get classification parameters."""
@@ -518,6 +699,7 @@ class ClassificationParametersWidget(ParameterWidget):
             self.method_combo.setCurrentText(params['classification_method'])
         if 'svm_training_data' in params:
             self.training_data_edit.setText(params['svm_training_data'])
+            self._validate_training_data_path(params['svm_training_data'])
         if 'svm_features' in params:
             # Clear selection and select specified features
             self.feature_list.clearSelection()
@@ -527,6 +709,12 @@ class ClassificationParametersWidget(ParameterWidget):
                     item.setSelected(True)
         if 'mobility_threshold' in params:
             self.mobility_threshold_spin.setValue(params['mobility_threshold'])
+
+    def showEvent(self, event):
+        """Called when widget is shown - good time to auto-populate."""
+        super().showEvent(event)
+        if not self.training_data_edit.text():  # Only auto-populate if empty
+            self._auto_populate_training_data()
 
 
 class ParameterPanelManager(QWidget):

@@ -125,6 +125,11 @@ class AnalysisControlWidget(QWidget):
         self.stop_button.setEnabled(False)
         button_layout.addWidget(self.stop_button)
 
+        # button to trigger suggestions
+        self.suggest_button = QPushButton("Suggest Parameters")
+        self.suggest_button.clicked.connect(self.suggest_parameter_improvements)
+        button_layout.addWidget(self.suggest_button)
+
         layout.addLayout(button_layout)
 
         # Progress bar
@@ -167,7 +172,7 @@ class AnalysisControlWidget(QWidget):
             self.data_combo.setCurrentText(current_text)
 
     def _run_analysis(self):
-        """Run the selected analysis steps."""
+        """Run the selected analysis steps with smart parameter optimization."""
         # Get selected data
         data_name = self.data_combo.currentText()
         if not data_name:
@@ -204,7 +209,11 @@ class AnalysisControlWidget(QWidget):
         if self.parameter_manager is not None:
             try:
                 parameters = self.parameter_manager.get_all_parameters()
-                self.logger.info("Using parameters from parameter manager")
+
+                # Apply smart parameter optimization
+                parameters = self._optimize_parameters(parameters, data, steps)
+
+                self.logger.info("Using optimized parameters from parameter manager")
             except Exception as e:
                 self.logger.warning(f"Error getting parameters from manager: {e}, using defaults")
                 parameters = self._get_default_parameters()
@@ -216,11 +225,88 @@ class AnalysisControlWidget(QWidget):
         if hasattr(self.analysis_engine, 'run_analysis_pipeline'):
             self.analysis_engine.run_analysis_pipeline(data, parameters, steps)
         else:
-            # Fallback: show message that analysis is not available
             QMessageBox.information(
                 self, "Info",
                 "Analysis engine not fully loaded. Please check the console for any import errors."
             )
+
+    def _optimize_parameters(self, parameters: Dict[str, Any], data, steps) -> Dict[str, Any]:
+        """Optimize parameters based on data characteristics."""
+
+        optimized = parameters.copy()
+
+        # If doing both detection and linking with trackpy detection
+        if (AnalysisStep.DETECTION in steps and AnalysisStep.LINKING in steps):
+            detection_method = parameters.get('detection_method', 'threshold')
+            linking_method = parameters.get('linking_method', 'nearest_neighbor')
+
+            # Auto-match linking method to detection method
+            if detection_method == 'trackpy' and linking_method != 'trackpy':
+                self.logger.info("Auto-switching to trackpy linking for trackpy detection")
+                optimized['linking_method'] = 'trackpy'
+
+                # Apply trackpy-optimized linking parameters
+                current_distance = parameters.get('max_distance', 5.0)
+                if current_distance > 3.0:
+                    optimized['max_distance'] = 2.5  # More conservative for trackpy
+                    self.logger.info(f"Reduced max_distance from {current_distance} to 2.5 for trackpy")
+
+                # Reduce memory for dense data
+                if isinstance(data, np.ndarray) and len(data.shape) >= 2:
+                    # Estimate if data might be dense based on image size
+                    total_pixels = np.prod(data.shape[-2:])  # Last 2 dims are spatial
+                    if total_pixels < 50000:  # Small field of view = likely dense
+                        optimized['max_gap_frames'] = min(1, parameters.get('max_gap_frames', 2))
+                        self.logger.info("Reduced max_gap_frames for dense data")
+
+            elif detection_method in ['threshold', 'log'] and linking_method == 'trackpy':
+                self.logger.info("Consider using nearest_neighbor linking for threshold/LoG detection")
+
+        # Optimize other parameters based on data type
+        if isinstance(data, np.ndarray) and len(data.shape) == 3:
+            n_frames = data.shape[0]
+            if n_frames < 10:
+                # Short time series - reduce memory and min track length
+                optimized['max_gap_frames'] = min(1, parameters.get('max_gap_frames', 2))
+                optimized['min_track_length'] = max(2, min(3, parameters.get('min_track_length', 3)))
+                self.logger.info("Optimized parameters for short time series")
+
+        return optimized
+
+    # Also add this helper method to suggest parameter improvements in the GUI:
+
+    def suggest_parameter_improvements(self):
+        """Show suggestions for parameter improvements based on current settings."""
+        if self.parameter_manager is None:
+            return
+
+        try:
+            current_params = self.parameter_manager.get_all_parameters()
+
+            suggestions = []
+
+            # Check for common issues
+            detection_method = current_params.get('detection_method', 'threshold')
+            linking_method = current_params.get('linking_method', 'nearest_neighbor')
+            max_distance = current_params.get('max_distance', 5.0)
+
+            if detection_method == 'trackpy' and linking_method != 'trackpy':
+                suggestions.append("💡 Consider using 'trackpy' linking with 'trackpy' detection for best results")
+
+            if max_distance > 5.0:
+                suggestions.append("⚠️ Max distance > 5 pixels may cause false linkages. Try 2-3 pixels first.")
+
+            if current_params.get('min_track_length', 3) < 5:
+                suggestions.append("🎯 Increase min track length to 5-10 to filter out noise")
+
+            if suggestions:
+                suggestion_text = "Parameter Suggestions:\n\n" + "\n\n".join(suggestions)
+                QMessageBox.information(self, "Parameter Suggestions", suggestion_text)
+            else:
+                QMessageBox.information(self, "Parameters", "Current parameters look good! 👍")
+
+        except Exception as e:
+            self.logger.error(f"Error generating parameter suggestions: {e}")
 
     def _get_default_parameters(self):
         """Get default parameters as fallback."""
