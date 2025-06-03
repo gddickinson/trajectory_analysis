@@ -1,0 +1,39 @@
+# ============================================================================
+# REQUIREMENTS.TXT
+# ============================================================================
+
+REQUIREMENTS_TXT = """
+# Core dependencies
+numpy>=1.21.0
+pandas>=1.3.0
+scipy>=1.7.0
+scikit-learn>=1.0.0
+scikit-image>=0.18.0
+
+# GUI dependencies
+PyQt6>=6.0.0
+pyqtgraph>=0.12.0
+
+# Optional analysis dependencies
+trackpy>=0.5.0
+opencv-python>=4.5.0
+
+# Visualization dependencies
+matplotlib>=3.4.0
+seaborn>=0.11.0
+
+# File I/O dependencies
+openpyxl>=3.0.0
+h5py>=3.1.0
+
+# Performance dependencies
+numba>=0.54.0
+joblib>=1.0.0
+
+# Development dependencies (optional)
+pytest>=6.0.0
+pytest-qt>=4.0.0
+black>=21.0.0
+flake8>=3.9.0
+sphinx>=4.0.0
+"""
