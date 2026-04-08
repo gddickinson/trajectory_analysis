@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 """
-Parameter Panels Module
-=======================
+Enhanced Parameter Panels Module
+=================================
 
-Provides GUI panels for configuring analysis parameters.
+Updated GUI panels for configuring all enhanced analysis parameters including
+multi-radius density analysis, advanced shape metrics, scaled Rg, and more.
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from dataclasses import asdict
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QGridLayout,
     QTabWidget, QGroupBox, QLabel, QSpinBox, QDoubleSpinBox,
     QComboBox, QCheckBox, QLineEdit, QPushButton, QFileDialog,
-    QSlider, QFrame, QScrollArea, QTextEdit, QListWidget
+    QSlider, QFrame, QScrollArea, QTextEdit, QListWidget,
+    QListWidgetItem, QSplitter
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
@@ -26,10 +28,11 @@ except ImportError:
     # Create a fallback AnalysisParameters class
     from dataclasses import dataclass
     from typing import List, Optional
+    import numpy as np
 
     @dataclass
     class AnalysisParameters:
-        """Fallback AnalysisParameters class."""
+        """Enhanced AnalysisParameters class."""
         # Detection parameters
         detection_method: str = "threshold"
         detection_sigma: float = 1.6
@@ -41,9 +44,22 @@ except ImportError:
         max_gap_frames: int = 2
         min_track_length: int = 3
 
-        # Feature calculation parameters
-        pixel_size: float = 108.0  # nm per pixel
-        frame_rate: float = 10.0   # Hz
+        # Basic feature calculation parameters
+        pixel_size: float = 108.0
+        frame_rate: float = 10.0
+
+        # Enhanced feature parameters
+        calculate_density: bool = True
+        density_radii: List[int] = None
+        calculate_advanced_shape: bool = True
+        calculate_scaled_rg: bool = True
+        calculate_diffusion: bool = True
+        calculate_precision: bool = True
+        interpolate_trajectories: bool = False
+
+        # Advanced shape analysis parameters
+        linear_eigenvalue_threshold: float = 20.0
+        linear_alignment_threshold: float = 0.7
 
         # Classification parameters
         mobility_threshold: float = 2.11
@@ -52,12 +68,18 @@ except ImportError:
         svm_training_data: Optional[str] = None
         svm_features: List[str] = None
 
+        # Background subtraction parameters
+        roi_background_data: Optional[np.ndarray] = None
+        camera_black_data: Optional[np.ndarray] = None
+
         def __post_init__(self):
             if self.svm_features is None:
                 self.svm_features = [
                     'radius_gyration', 'asymmetry', 'fracDimension',
                     'netDispl', 'Straight', 'kurtosis'
                 ]
+            if self.density_radii is None:
+                self.density_radii = [3, 5, 10, 20, 30]
 
 
 class ParameterWidget(QWidget):
@@ -83,7 +105,7 @@ class ParameterWidget(QWidget):
 
 
 class DetectionParametersWidget(ParameterWidget):
-    """Widget for particle detection parameters."""
+    """Widget for detection parameters."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -95,84 +117,40 @@ class DetectionParametersWidget(ParameterWidget):
 
         # Detection method
         self.method_combo = QComboBox()
-        self.method_combo.addItems([
-            "threshold", "log", "trackpy"
-        ])
-        self.method_combo.setCurrentText("threshold")
-        self.method_combo.currentTextChanged.connect(self._on_method_changed)
+        self.method_combo.addItems(["threshold", "log", "trackpy"])
+        self.method_combo.currentTextChanged.connect(self.valueChanged)
         layout.addRow("Detection Method:", self.method_combo)
 
-        # Sigma (spot size)
+        # Sigma parameter
         self.sigma_spin = QDoubleSpinBox()
         self.sigma_spin.setRange(0.1, 10.0)
-        self.sigma_spin.setSingleStep(0.1)
         self.sigma_spin.setValue(1.6)
         self.sigma_spin.setDecimals(2)
         self.sigma_spin.setSuffix(" pixels")
         self.sigma_spin.valueChanged.connect(self.valueChanged)
-        layout.addRow("Sigma (spot size):", self.sigma_spin)
+        layout.addRow("Sigma:", self.sigma_spin)
 
-        # Threshold
+        # Threshold parameter
         self.threshold_spin = QDoubleSpinBox()
-        self.threshold_spin.setRange(0.1, 100.0)
-        self.threshold_spin.setSingleStep(0.1)
+        self.threshold_spin.setRange(0.1, 20.0)
         self.threshold_spin.setValue(3.0)
-        self.threshold_spin.setDecimals(2)
-        self.threshold_spin.setSuffix(" σ")
+        self.threshold_spin.setDecimals(1)
         self.threshold_spin.valueChanged.connect(self.valueChanged)
         layout.addRow("Threshold:", self.threshold_spin)
 
-        # Minimum intensity
+        # Min intensity
         self.min_intensity_spin = QSpinBox()
-        self.min_intensity_spin.setRange(0, 65535)
+        self.min_intensity_spin.setRange(0, 100000)
         self.min_intensity_spin.setValue(100)
         self.min_intensity_spin.valueChanged.connect(self.valueChanged)
         layout.addRow("Min Intensity:", self.min_intensity_spin)
 
-        # Maximum intensity
+        # Max intensity
         self.max_intensity_spin = QSpinBox()
-        self.max_intensity_spin.setRange(0, 65535)
+        self.max_intensity_spin.setRange(100, 1000000)
         self.max_intensity_spin.setValue(10000)
         self.max_intensity_spin.valueChanged.connect(self.valueChanged)
         layout.addRow("Max Intensity:", self.max_intensity_spin)
-
-        # Spot diameter (for trackpy)
-        self.diameter_spin = QSpinBox()
-        self.diameter_spin.setRange(3, 51)
-        self.diameter_spin.setValue(7)
-        self.diameter_spin.setSingleStep(2)
-        self.diameter_spin.setSuffix(" pixels")
-        self.diameter_spin.valueChanged.connect(self.valueChanged)
-        layout.addRow("Spot Diameter:", self.diameter_spin)
-
-        # Background subtraction
-        self.background_cb = QCheckBox("Background Subtraction")
-        self.background_cb.setChecked(True)
-        self.background_cb.toggled.connect(self.valueChanged)
-        layout.addRow("", self.background_cb)
-
-        # Connect signals
-        self.method_combo.currentTextChanged.connect(self.valueChanged)
-
-    def _on_method_changed(self, method: str):
-        """Handle detection method change."""
-        # Enable/disable relevant controls based on method
-        trackpy_controls = [self.diameter_spin]
-        threshold_controls = [self.sigma_spin, self.threshold_spin]
-
-        if method == "trackpy":
-            for control in trackpy_controls:
-                control.setEnabled(True)
-        else:
-            for control in trackpy_controls:
-                control.setEnabled(False)
-
-        if method in ["threshold", "log"]:
-            for control in threshold_controls:
-                control.setEnabled(True)
-        else:
-            for control in threshold_controls:
-                control.setEnabled(False)
 
     def get_value(self) -> Dict[str, Any]:
         """Get detection parameters."""
@@ -181,9 +159,7 @@ class DetectionParametersWidget(ParameterWidget):
             'detection_sigma': self.sigma_spin.value(),
             'detection_threshold': self.threshold_spin.value(),
             'min_intensity': self.min_intensity_spin.value(),
-            'max_intensity': self.max_intensity_spin.value(),
-            'spot_diameter': self.diameter_spin.value(),
-            'background_subtraction': self.background_cb.isChecked()
+            'max_intensity': self.max_intensity_spin.value()
         }
 
     def set_value(self, params: Dict[str, Any]):
@@ -198,14 +174,18 @@ class DetectionParametersWidget(ParameterWidget):
             self.min_intensity_spin.setValue(params['min_intensity'])
         if 'max_intensity' in params:
             self.max_intensity_spin.setValue(params['max_intensity'])
-        if 'spot_diameter' in params:
-            self.diameter_spin.setValue(params['spot_diameter'])
-        if 'background_subtraction' in params:
-            self.background_cb.setChecked(params['background_subtraction'])
+
+    def reset_to_default(self):
+        """Reset to default values."""
+        self.method_combo.setCurrentText("threshold")
+        self.sigma_spin.setValue(1.6)
+        self.threshold_spin.setValue(3.0)
+        self.min_intensity_spin.setValue(100)
+        self.max_intensity_spin.setValue(10000)
 
 
 class LinkingParametersWidget(ParameterWidget):
-    """Widget for particle linking parameters with smart defaults."""
+    """Widget for linking parameters."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -217,139 +197,32 @@ class LinkingParametersWidget(ParameterWidget):
 
         # Linking method
         self.method_combo = QComboBox()
-        self.method_combo.addItems([
-            "trackpy", "nearest_neighbor"
-        ])
-        self.method_combo.setCurrentText("trackpy")  # Default to trackpy
-        self.method_combo.currentTextChanged.connect(self._on_method_changed)
+        self.method_combo.addItems(["nearest_neighbor", "trackpy"])
         self.method_combo.currentTextChanged.connect(self.valueChanged)
         layout.addRow("Linking Method:", self.method_combo)
 
-        # Add help text
-        help_label = QLabel("💡 Use 'trackpy' for trackpy detection, 'nearest_neighbor' for others")
-        help_label.setStyleSheet("QLabel { color: gray; font-size: 9px; }")
-        layout.addRow("", help_label)
-
-        # Maximum distance (search range)
+        # Max distance
         self.max_distance_spin = QDoubleSpinBox()
-        self.max_distance_spin.setRange(0.1, 20.0)
-        self.max_distance_spin.setSingleStep(0.1)
-        self.max_distance_spin.setValue(2.0)  # Smaller default for trackpy
-        self.max_distance_spin.setDecimals(2)
+        self.max_distance_spin.setRange(0.1, 50.0)
+        self.max_distance_spin.setValue(5.0)
+        self.max_distance_spin.setDecimals(1)
         self.max_distance_spin.setSuffix(" pixels")
         self.max_distance_spin.valueChanged.connect(self.valueChanged)
         layout.addRow("Max Distance:", self.max_distance_spin)
 
-        # Distance guidance
-        distance_help = QLabel("🎯 Start with 1-3 pixels for dense data, 3-5 for sparse")
-        distance_help.setStyleSheet("QLabel { color: gray; font-size: 9px; }")
-        layout.addRow("", distance_help)
-
-        # Maximum gap frames (memory)
+        # Max gap frames
         self.max_gap_spin = QSpinBox()
-        self.max_gap_spin.setRange(0, 10)
-        self.max_gap_spin.setValue(1)  # Smaller default
-        self.max_gap_spin.setSuffix(" frames")
+        self.max_gap_spin.setRange(0, 20)
+        self.max_gap_spin.setValue(2)
         self.max_gap_spin.valueChanged.connect(self.valueChanged)
         layout.addRow("Max Gap Frames:", self.max_gap_spin)
 
-        # Minimum track length
+        # Min track length
         self.min_length_spin = QSpinBox()
-        self.min_length_spin.setRange(2, 1000)
-        self.min_length_spin.setValue(5)  # Higher default to filter noise
-        self.min_length_spin.setSuffix(" points")
+        self.min_length_spin.setRange(1, 1000)
+        self.min_length_spin.setValue(3)
         self.min_length_spin.valueChanged.connect(self.valueChanged)
         layout.addRow("Min Track Length:", self.min_length_spin)
-
-        # Advanced options (collapsible)
-        self.advanced_group = QGroupBox("Advanced Options")
-        self.advanced_group.setCheckable(True)
-        self.advanced_group.setChecked(False)
-        advanced_layout = QFormLayout(self.advanced_group)
-
-        # Adaptive parameters for trackpy
-        self.adaptive_cb = QCheckBox("Adaptive Search")
-        self.adaptive_cb.setChecked(True)
-        self.adaptive_cb.setToolTip("Automatically reduce search range if linking becomes too complex")
-        self.adaptive_cb.toggled.connect(self.valueChanged)
-        advanced_layout.addRow("", self.adaptive_cb)
-
-        # Link strategy
-        self.strategy_combo = QComboBox()
-        self.strategy_combo.addItems([
-            "auto", "numba", "recursive", "nonrecursive"
-        ])
-        self.strategy_combo.setCurrentText("auto")
-        self.strategy_combo.currentTextChanged.connect(self.valueChanged)
-        advanced_layout.addRow("Link Strategy:", self.strategy_combo)
-
-        layout.addRow(self.advanced_group)
-
-        # Preset buttons
-        preset_layout = QHBoxLayout()
-
-        self.dense_preset_btn = QPushButton("Dense Data")
-        self.dense_preset_btn.setToolTip("Settings for high particle density")
-        self.dense_preset_btn.clicked.connect(self._apply_dense_preset)
-        preset_layout.addWidget(self.dense_preset_btn)
-
-        self.sparse_preset_btn = QPushButton("Sparse Data")
-        self.sparse_preset_btn.setToolTip("Settings for low particle density")
-        self.sparse_preset_btn.clicked.connect(self._apply_sparse_preset)
-        preset_layout.addWidget(self.sparse_preset_btn)
-
-        self.fast_preset_btn = QPushButton("Fast Motion")
-        self.fast_preset_btn.setToolTip("Settings for fast-moving particles")
-        self.fast_preset_btn.clicked.connect(self._apply_fast_preset)
-        preset_layout.addWidget(self.fast_preset_btn)
-
-        layout.addRow("Presets:", preset_layout)
-
-        # Initialize with trackpy settings
-        self._on_method_changed("trackpy")
-
-    def _on_method_changed(self, method: str):
-        """Handle linking method change and adjust defaults."""
-        if method == "trackpy":
-            # Trackpy-optimized defaults
-            self.max_distance_spin.setValue(2.0)
-            self.max_gap_spin.setValue(1)
-            self.min_length_spin.setValue(5)
-            self.strategy_combo.setEnabled(True)
-            self.adaptive_cb.setEnabled(True)
-        else:
-            # Nearest neighbor defaults
-            self.max_distance_spin.setValue(5.0)
-            self.max_gap_spin.setValue(2)
-            self.min_length_spin.setValue(3)
-            self.strategy_combo.setEnabled(False)
-            self.adaptive_cb.setEnabled(False)
-
-    def _apply_dense_preset(self):
-        """Apply settings for dense particle data."""
-        self.method_combo.setCurrentText("trackpy")
-        self.max_distance_spin.setValue(1.5)
-        self.max_gap_spin.setValue(0)
-        self.min_length_spin.setValue(10)
-        self.adaptive_cb.setChecked(True)
-        self.valueChanged.emit()
-
-    def _apply_sparse_preset(self):
-        """Apply settings for sparse particle data."""
-        self.method_combo.setCurrentText("nearest_neighbor")
-        self.max_distance_spin.setValue(7.0)
-        self.max_gap_spin.setValue(3)
-        self.min_length_spin.setValue(3)
-        self.valueChanged.emit()
-
-    def _apply_fast_preset(self):
-        """Apply settings for fast-moving particles."""
-        self.method_combo.setCurrentText("trackpy")
-        self.max_distance_spin.setValue(4.0)
-        self.max_gap_spin.setValue(2)
-        self.min_length_spin.setValue(5)
-        self.adaptive_cb.setChecked(True)
-        self.valueChanged.emit()
 
     def get_value(self) -> Dict[str, Any]:
         """Get linking parameters."""
@@ -357,9 +230,7 @@ class LinkingParametersWidget(ParameterWidget):
             'linking_method': self.method_combo.currentText(),
             'max_distance': self.max_distance_spin.value(),
             'max_gap_frames': self.max_gap_spin.value(),
-            'min_track_length': self.min_length_spin.value(),
-            'adaptive_search': self.adaptive_cb.isChecked(),
-            'link_strategy': self.strategy_combo.currentText()
+            'min_track_length': self.min_length_spin.value()
         }
 
     def set_value(self, params: Dict[str, Any]):
@@ -372,14 +243,17 @@ class LinkingParametersWidget(ParameterWidget):
             self.max_gap_spin.setValue(params['max_gap_frames'])
         if 'min_track_length' in params:
             self.min_length_spin.setValue(params['min_track_length'])
-        if 'adaptive_search' in params:
-            self.adaptive_cb.setChecked(params['adaptive_search'])
-        if 'link_strategy' in params:
-            self.strategy_combo.setCurrentText(params['link_strategy'])
+
+    def reset_to_default(self):
+        """Reset to default values."""
+        self.method_combo.setCurrentText("nearest_neighbor")
+        self.max_distance_spin.setValue(5.0)
+        self.max_gap_spin.setValue(2)
+        self.min_length_spin.setValue(3)
 
 
-class FeatureParametersWidget(ParameterWidget):
-    """Widget for feature calculation parameters."""
+class EnhancedFeatureParametersWidget(ParameterWidget):
+    """Widget for enhanced feature calculation parameters."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -387,12 +261,58 @@ class FeatureParametersWidget(ParameterWidget):
 
     def _setup_ui(self):
         """Setup the user interface."""
-        layout = QFormLayout(self)
+        layout = QVBoxLayout(self)
+
+        # Create main tabs for different feature categories
+        self.feature_tabs = QTabWidget()
+
+        # Basic Features Tab
+        self.basic_tab = self._create_basic_features_tab()
+        self.feature_tabs.addTab(self.basic_tab, "Basic Features")
+
+        # Density Analysis Tab
+        self.density_tab = self._create_density_analysis_tab()
+        self.feature_tabs.addTab(self.density_tab, "Density Analysis")
+
+        # Advanced Shape Tab
+        self.shape_tab = self._create_advanced_shape_tab()
+        self.feature_tabs.addTab(self.shape_tab, "Advanced Shape")
+
+        # Mobility & Diffusion Tab
+        self.mobility_tab = self._create_mobility_diffusion_tab()
+        self.feature_tabs.addTab(self.mobility_tab, "Mobility & Diffusion")
+
+        # Quality & Precision Tab
+        self.quality_tab = self._create_quality_precision_tab()
+        self.feature_tabs.addTab(self.quality_tab, "Quality & Precision")
+
+        layout.addWidget(self.feature_tabs)
+
+        # Global controls
+        controls_layout = QHBoxLayout()
+
+        self.enable_all_btn = QPushButton("Enable All")
+        self.enable_all_btn.clicked.connect(self._enable_all_features)
+        controls_layout.addWidget(self.enable_all_btn)
+
+        self.disable_all_btn = QPushButton("Disable All")
+        self.disable_all_btn.clicked.connect(self._disable_all_features)
+        controls_layout.addWidget(self.disable_all_btn)
+
+        self.reset_btn = QPushButton("Reset to Defaults")
+        self.reset_btn.clicked.connect(self._reset_to_defaults)
+        controls_layout.addWidget(self.reset_btn)
+
+        layout.addLayout(controls_layout)
+
+    def _create_basic_features_tab(self) -> QWidget:
+        """Create basic features configuration tab."""
+        tab = QWidget()
+        layout = QFormLayout(tab)
 
         # Pixel size
         self.pixel_size_spin = QDoubleSpinBox()
         self.pixel_size_spin.setRange(1.0, 1000.0)
-        self.pixel_size_spin.setSingleStep(1.0)
         self.pixel_size_spin.setValue(108.0)
         self.pixel_size_spin.setDecimals(2)
         self.pixel_size_spin.setSuffix(" nm")
@@ -402,102 +322,440 @@ class FeatureParametersWidget(ParameterWidget):
         # Frame rate
         self.frame_rate_spin = QDoubleSpinBox()
         self.frame_rate_spin.setRange(0.1, 1000.0)
-        self.frame_rate_spin.setSingleStep(0.1)
         self.frame_rate_spin.setValue(10.0)
         self.frame_rate_spin.setDecimals(2)
         self.frame_rate_spin.setSuffix(" Hz")
         self.frame_rate_spin.valueChanged.connect(self.valueChanged)
         layout.addRow("Frame Rate:", self.frame_rate_spin)
 
-        # Feature selection
-        features_group = QGroupBox("Features to Calculate")
+        # Basic feature toggles
+        features_group = QGroupBox("Basic Features")
         features_layout = QVBoxLayout(features_group)
 
-        self.rg_cb = QCheckBox("Radius of Gyration")
-        self.rg_cb.setChecked(True)
-        self.rg_cb.toggled.connect(self.valueChanged)
-        features_layout.addWidget(self.rg_cb)
+        self.calc_rg_cb = QCheckBox("Radius of Gyration")
+        self.calc_rg_cb.setChecked(True)
+        self.calc_rg_cb.toggled.connect(self.valueChanged)
+        features_layout.addWidget(self.calc_rg_cb)
 
-        self.asymmetry_cb = QCheckBox("Asymmetry")
-        self.asymmetry_cb.setChecked(True)
-        self.asymmetry_cb.toggled.connect(self.valueChanged)
-        features_layout.addWidget(self.asymmetry_cb)
+        self.calc_velocity_cb = QCheckBox("Velocity Metrics")
+        self.calc_velocity_cb.setChecked(True)
+        self.calc_velocity_cb.toggled.connect(self.valueChanged)
+        features_layout.addWidget(self.calc_velocity_cb)
 
-        self.fractal_cb = QCheckBox("Fractal Dimension")
-        self.fractal_cb.setChecked(True)
-        self.fractal_cb.toggled.connect(self.valueChanged)
-        features_layout.addWidget(self.fractal_cb)
-
-        self.msd_cb = QCheckBox("Mean Square Displacement")
-        self.msd_cb.setChecked(True)
-        self.msd_cb.toggled.connect(self.valueChanged)
-        features_layout.addWidget(self.msd_cb)
-
-        self.velocity_cb = QCheckBox("Velocity")
-        self.velocity_cb.setChecked(True)
-        self.velocity_cb.toggled.connect(self.valueChanged)
-        features_layout.addWidget(self.velocity_cb)
-
-        self.nn_cb = QCheckBox("Nearest Neighbors")
-        self.nn_cb.setChecked(True)
-        self.nn_cb.toggled.connect(self.valueChanged)
-        features_layout.addWidget(self.nn_cb)
+        self.calc_nn_cb = QCheckBox("Nearest Neighbors")
+        self.calc_nn_cb.setChecked(True)
+        self.calc_nn_cb.toggled.connect(self.valueChanged)
+        features_layout.addWidget(self.calc_nn_cb)
 
         layout.addRow(features_group)
+
+        return tab
+
+    def _create_density_analysis_tab(self) -> QWidget:
+        """Create density analysis configuration tab."""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        # Enable density analysis
+        self.density_enabled_cb = QCheckBox("Enable Multi-Radius Density Analysis")
+        self.density_enabled_cb.setChecked(True)
+        self.density_enabled_cb.toggled.connect(self._on_density_enabled_changed)
+        self.density_enabled_cb.toggled.connect(self.valueChanged)
+        layout.addWidget(self.density_enabled_cb)
+
+        # Density radii configuration
+        radii_group = QGroupBox("Analysis Radii (pixels)")
+        radii_layout = QVBoxLayout(radii_group)
+
+        # Instructions
+        info_label = QLabel("Select radii for neighbor counting. Default: 3, 5, 10, 20, 30 pixels")
+        info_label.setStyleSheet("QLabel { color: gray; font-size: 10px; }")
+        radii_layout.addWidget(info_label)
+
+        # Radii list widget
+        self.radii_list = QListWidget()
+        self.radii_list.setMaximumHeight(120)
+        self.radii_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
+
+        # Add default radii
+        default_radii = [3, 5, 10, 20, 30]
+        for radius in default_radii:
+            item = QListWidgetItem(f"{radius} pixels")
+            item.setData(Qt.ItemDataRole.UserRole, radius)
+            item.setSelected(True)
+            self.radii_list.addItem(item)
+
+        self.radii_list.itemSelectionChanged.connect(self.valueChanged)
+        radii_layout.addWidget(self.radii_list)
+
+        # Add/remove radii controls
+        radii_controls = QHBoxLayout()
+
+        self.add_radius_spin = QSpinBox()
+        self.add_radius_spin.setRange(1, 100)
+        self.add_radius_spin.setValue(15)
+        self.add_radius_spin.setSuffix(" px")
+        radii_controls.addWidget(QLabel("Add radius:"))
+        radii_controls.addWidget(self.add_radius_spin)
+
+        self.add_radius_btn = QPushButton("Add")
+        self.add_radius_btn.clicked.connect(self._add_radius)
+        radii_controls.addWidget(self.add_radius_btn)
+
+        self.remove_radius_btn = QPushButton("Remove Selected")
+        self.remove_radius_btn.clicked.connect(self._remove_radius)
+        radii_controls.addWidget(self.remove_radius_btn)
+
+        radii_layout.addLayout(radii_controls)
+
+        # Preset buttons
+        preset_layout = QHBoxLayout()
+
+        self.dense_preset_btn = QPushButton("Dense (3,5,10)")
+        self.dense_preset_btn.clicked.connect(lambda: self._set_radius_preset([3, 5, 10]))
+        preset_layout.addWidget(self.dense_preset_btn)
+
+        self.standard_preset_btn = QPushButton("Standard (3,5,10,20,30)")
+        self.standard_preset_btn.clicked.connect(lambda: self._set_radius_preset([3, 5, 10, 20, 30]))
+        preset_layout.addWidget(self.standard_preset_btn)
+
+        self.extended_preset_btn = QPushButton("Extended (3,5,10,20,30,50)")
+        self.extended_preset_btn.clicked.connect(lambda: self._set_radius_preset([3, 5, 10, 20, 30, 50]))
+        preset_layout.addWidget(self.extended_preset_btn)
+
+        radii_layout.addLayout(preset_layout)
+
+        layout.addWidget(radii_group)
+        layout.addStretch()
+
+        return tab
+
+    def _create_advanced_shape_tab(self) -> QWidget:
+        """Create advanced shape analysis configuration tab."""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        # Enable advanced shape analysis
+        self.advanced_shape_cb = QCheckBox("Enable Advanced Shape Analysis")
+        self.advanced_shape_cb.setChecked(True)
+        self.advanced_shape_cb.toggled.connect(self._on_advanced_shape_changed)
+        self.advanced_shape_cb.toggled.connect(self.valueChanged)
+        layout.addWidget(self.advanced_shape_cb)
+
+        # Shape metrics group
+        metrics_group = QGroupBox("Shape Metrics")
+        metrics_layout = QVBoxLayout(metrics_group)
+
+        metrics_info = QLabel("Includes: eigenvalue ratios, linearity classification, directionality ratios, step alignment")
+        metrics_info.setStyleSheet("QLabel { color: gray; font-size: 10px; }")
+        metrics_layout.addWidget(metrics_info)
+
+        self.eigenvalue_ratio_cb = QCheckBox("Eigenvalue Ratio Analysis")
+        self.eigenvalue_ratio_cb.setChecked(True)
+        self.eigenvalue_ratio_cb.toggled.connect(self.valueChanged)
+        metrics_layout.addWidget(self.eigenvalue_ratio_cb)
+
+        self.step_alignment_cb = QCheckBox("Step Alignment Analysis")
+        self.step_alignment_cb.setChecked(True)
+        self.step_alignment_cb.toggled.connect(self.valueChanged)
+        metrics_layout.addWidget(self.step_alignment_cb)
+
+        self.directionality_cb = QCheckBox("Directionality Ratio")
+        self.directionality_cb.setChecked(True)
+        self.directionality_cb.toggled.connect(self.valueChanged)
+        metrics_layout.addWidget(self.directionality_cb)
+
+        layout.addWidget(metrics_group)
+
+        # Linearity classification parameters
+        linearity_group = QGroupBox("Linearity Classification Thresholds")
+        linearity_layout = QFormLayout(linearity_group)
+
+        self.eigenvalue_threshold_spin = QDoubleSpinBox()
+        self.eigenvalue_threshold_spin.setRange(1.0, 100.0)
+        self.eigenvalue_threshold_spin.setValue(20.0)
+        self.eigenvalue_threshold_spin.setDecimals(1)
+        self.eigenvalue_threshold_spin.valueChanged.connect(self.valueChanged)
+        linearity_layout.addRow("Eigenvalue Ratio Threshold:", self.eigenvalue_threshold_spin)
+
+        self.alignment_threshold_spin = QDoubleSpinBox()
+        self.alignment_threshold_spin.setRange(0.1, 1.0)
+        self.alignment_threshold_spin.setValue(0.7)
+        self.alignment_threshold_spin.setDecimals(2)
+        self.alignment_threshold_spin.valueChanged.connect(self.valueChanged)
+        linearity_layout.addRow("Step Alignment Threshold:", self.alignment_threshold_spin)
+
+        # Help text
+        help_text = QLabel("Higher thresholds = more stringent linear classification")
+        help_text.setStyleSheet("QLabel { color: gray; font-size: 9px; }")
+        linearity_layout.addRow("", help_text)
+
+        layout.addWidget(linearity_group)
+        layout.addStretch()
+
+        return tab
+
+    def _create_mobility_diffusion_tab(self) -> QWidget:
+        """Create mobility and diffusion analysis tab."""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        # Scaled Rg group
+        scaled_rg_group = QGroupBox("Scaled Radius of Gyration (sRg)")
+        scaled_rg_layout = QFormLayout(scaled_rg_group)
+
+        self.scaled_rg_cb = QCheckBox("Calculate Scaled Rg")
+        self.scaled_rg_cb.setChecked(True)
+        self.scaled_rg_cb.toggled.connect(self.valueChanged)
+        scaled_rg_layout.addRow("", self.scaled_rg_cb)
 
         # Mobility threshold
         self.mobility_threshold_spin = QDoubleSpinBox()
         self.mobility_threshold_spin.setRange(0.1, 10.0)
-        self.mobility_threshold_spin.setSingleStep(0.01)
         self.mobility_threshold_spin.setValue(2.11)
         self.mobility_threshold_spin.setDecimals(3)
         self.mobility_threshold_spin.valueChanged.connect(self.valueChanged)
-        layout.addRow("Mobility Threshold:", self.mobility_threshold_spin)
+        scaled_rg_layout.addRow("Mobility Threshold:", self.mobility_threshold_spin)
+
+        mobility_help = QLabel("Golan & Sherman threshold: sRg > 2.11 = mobile")
+        mobility_help.setStyleSheet("QLabel { color: gray; font-size: 9px; }")
+        scaled_rg_layout.addRow("", mobility_help)
+
+        layout.addWidget(scaled_rg_group)
+
+        # Diffusion analysis group
+        diffusion_group = QGroupBox("Diffusion Analysis")
+        diffusion_layout = QVBoxLayout(diffusion_group)
+
+        self.diffusion_cb = QCheckBox("Enable Comprehensive Diffusion Analysis")
+        self.diffusion_cb.setChecked(True)
+        self.diffusion_cb.toggled.connect(self.valueChanged)
+        diffusion_layout.addWidget(self.diffusion_cb)
+
+        diffusion_info = QLabel("Includes: MSD analysis, diffusion coefficients, trajectory origin analysis")
+        diffusion_info.setStyleSheet("QLabel { color: gray; font-size: 10px; }")
+        diffusion_layout.addWidget(diffusion_info)
+
+        layout.addWidget(diffusion_group)
+        layout.addStretch()
+
+        return tab
+
+    def _create_quality_precision_tab(self) -> QWidget:
+        """Create quality and precision analysis tab."""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        # Localization precision group
+        precision_group = QGroupBox("Localization Precision Analysis")
+        precision_layout = QVBoxLayout(precision_group)
+
+        self.precision_cb = QCheckBox("Enable Localization Precision Analysis")
+        self.precision_cb.setChecked(True)
+        self.precision_cb.toggled.connect(self.valueChanged)
+        precision_layout.addWidget(self.precision_cb)
+
+        precision_info = QLabel("Analyzes position variability and measurement precision")
+        precision_info.setStyleSheet("QLabel { color: gray; font-size: 10px; }")
+        precision_layout.addWidget(precision_info)
+
+        layout.addWidget(precision_group)
+
+        # Trajectory interpolation group
+        interp_group = QGroupBox("Trajectory Interpolation")
+        interp_layout = QVBoxLayout(interp_group)
+
+        self.interpolate_cb = QCheckBox("Interpolate Missing Timepoints")
+        self.interpolate_cb.setChecked(False)
+        self.interpolate_cb.toggled.connect(self.valueChanged)
+        interp_layout.addWidget(self.interpolate_cb)
+
+        interp_info = QLabel("Fill gaps in trajectories using linear interpolation")
+        interp_info.setStyleSheet("QLabel { color: gray; font-size: 10px; }")
+        interp_layout.addWidget(interp_info)
+
+        interp_warning = QLabel("⚠️ May affect statistical analysis - use carefully")
+        interp_warning.setStyleSheet("QLabel { color: orange; font-size: 9px; }")
+        interp_layout.addWidget(interp_warning)
+
+        layout.addWidget(interp_group)
+        layout.addStretch()
+
+        return tab
+
+    # Event handlers
+    def _on_density_enabled_changed(self, enabled: bool):
+        """Handle density analysis enable/disable."""
+        self.radii_list.setEnabled(enabled)
+        self.add_radius_spin.setEnabled(enabled)
+        self.add_radius_btn.setEnabled(enabled)
+        self.remove_radius_btn.setEnabled(enabled)
+
+    def _on_advanced_shape_changed(self, enabled: bool):
+        """Handle advanced shape analysis enable/disable."""
+        self.eigenvalue_threshold_spin.setEnabled(enabled)
+        self.alignment_threshold_spin.setEnabled(enabled)
+
+    def _add_radius(self):
+        """Add a new radius to the list."""
+        radius = self.add_radius_spin.value()
+        
+        # Check if radius already exists
+        for i in range(self.radii_list.count()):
+            item = self.radii_list.item(i)
+            if item.data(Qt.ItemDataRole.UserRole) == radius:
+                return  # Already exists
+
+        # Add new radius
+        item = QListWidgetItem(f"{radius} pixels")
+        item.setData(Qt.ItemDataRole.UserRole, radius)
+        item.setSelected(True)
+        self.radii_list.addItem(item)
+        self.valueChanged.emit()
+
+    def _remove_radius(self):
+        """Remove selected radii from the list."""
+        for item in self.radii_list.selectedItems():
+            row = self.radii_list.row(item)
+            self.radii_list.takeItem(row)
+        self.valueChanged.emit()
+
+    def _set_radius_preset(self, radii: List[int]):
+        """Set radii to a preset configuration."""
+        self.radii_list.clear()
+        for radius in sorted(radii):
+            item = QListWidgetItem(f"{radius} pixels")
+            item.setData(Qt.ItemDataRole.UserRole, radius)
+            item.setSelected(True)
+            self.radii_list.addItem(item)
+        self.valueChanged.emit()
+
+    def _enable_all_features(self):
+        """Enable all feature calculations."""
+        self.density_enabled_cb.setChecked(True)
+        self.advanced_shape_cb.setChecked(True)
+        self.scaled_rg_cb.setChecked(True)
+        self.diffusion_cb.setChecked(True)
+        self.precision_cb.setChecked(True)
+        self.valueChanged.emit()
+
+    def _disable_all_features(self):
+        """Disable all feature calculations."""
+        self.density_enabled_cb.setChecked(False)
+        self.advanced_shape_cb.setChecked(False)
+        self.scaled_rg_cb.setChecked(False)
+        self.diffusion_cb.setChecked(False)
+        self.precision_cb.setChecked(False)
+        self.valueChanged.emit()
+
+    def _reset_to_defaults(self):
+        """Reset all parameters to default values."""
+        # Reset basic parameters
+        self.pixel_size_spin.setValue(108.0)
+        self.frame_rate_spin.setValue(10.0)
+
+        # Reset feature toggles
+        self.density_enabled_cb.setChecked(True)
+        self.advanced_shape_cb.setChecked(True)
+        self.scaled_rg_cb.setChecked(True)
+        self.diffusion_cb.setChecked(True)
+        self.precision_cb.setChecked(True)
+        self.interpolate_cb.setChecked(False)
+
+        # Reset thresholds
+        self.mobility_threshold_spin.setValue(2.11)
+        self.eigenvalue_threshold_spin.setValue(20.0)
+        self.alignment_threshold_spin.setValue(0.7)
+
+        # Reset radii to defaults
+        self._set_radius_preset([3, 5, 10, 20, 30])
+
+        self.valueChanged.emit()
 
     def get_value(self) -> Dict[str, Any]:
-        """Get feature parameters."""
+        """Get all enhanced feature parameters."""
+        # Get selected radii
+        selected_radii = []
+        for i in range(self.radii_list.count()):
+            item = self.radii_list.item(i)
+            if item.isSelected():
+                selected_radii.append(item.data(Qt.ItemDataRole.UserRole))
+
         return {
+            # Basic parameters
             'pixel_size': self.pixel_size_spin.value(),
             'frame_rate': self.frame_rate_spin.value(),
-            'calculate_rg': self.rg_cb.isChecked(),
-            'calculate_asymmetry': self.asymmetry_cb.isChecked(),
-            'calculate_fractal': self.fractal_cb.isChecked(),
-            'calculate_msd': self.msd_cb.isChecked(),
-            'calculate_velocity': self.velocity_cb.isChecked(),
-            'calculate_nn': self.nn_cb.isChecked(),
-            'mobility_threshold': self.mobility_threshold_spin.value()
+
+            # Enhanced feature toggles
+            'calculate_density': self.density_enabled_cb.isChecked(),
+            'density_radii': sorted(selected_radii),
+            'calculate_advanced_shape': self.advanced_shape_cb.isChecked(),
+            'calculate_scaled_rg': self.scaled_rg_cb.isChecked(),
+            'calculate_diffusion': self.diffusion_cb.isChecked(),
+            'calculate_precision': self.precision_cb.isChecked(),
+            'interpolate_trajectories': self.interpolate_cb.isChecked(),
+
+            # Advanced shape parameters
+            'linear_eigenvalue_threshold': self.eigenvalue_threshold_spin.value(),
+            'linear_alignment_threshold': self.alignment_threshold_spin.value(),
+
+            # Mobility parameters
+            'mobility_threshold': self.mobility_threshold_spin.value(),
+
+            # Individual feature flags
+            'calculate_rg': self.calc_rg_cb.isChecked(),
+            'calculate_velocity': self.calc_velocity_cb.isChecked(),
+            'calculate_nn': self.calc_nn_cb.isChecked(),
+            'calculate_eigenvalue_ratio': self.eigenvalue_ratio_cb.isChecked(),
+            'calculate_step_alignment': self.step_alignment_cb.isChecked(),
+            'calculate_directionality': self.directionality_cb.isChecked(),
         }
 
     def set_value(self, params: Dict[str, Any]):
-        """Set feature parameters."""
+        """Set enhanced feature parameters."""
+        # Basic parameters
         if 'pixel_size' in params:
             self.pixel_size_spin.setValue(params['pixel_size'])
         if 'frame_rate' in params:
             self.frame_rate_spin.setValue(params['frame_rate'])
-        if 'calculate_rg' in params:
-            self.rg_cb.setChecked(params['calculate_rg'])
-        if 'calculate_asymmetry' in params:
-            self.asymmetry_cb.setChecked(params['calculate_asymmetry'])
-        if 'calculate_fractal' in params:
-            self.fractal_cb.setChecked(params['calculate_fractal'])
-        if 'calculate_msd' in params:
-            self.msd_cb.setChecked(params['calculate_msd'])
-        if 'calculate_velocity' in params:
-            self.velocity_cb.setChecked(params['calculate_velocity'])
-        if 'calculate_nn' in params:
-            self.nn_cb.setChecked(params['calculate_nn'])
+
+        # Feature toggles
+        if 'calculate_density' in params:
+            self.density_enabled_cb.setChecked(params['calculate_density'])
+        if 'calculate_advanced_shape' in params:
+            self.advanced_shape_cb.setChecked(params['calculate_advanced_shape'])
+        if 'calculate_scaled_rg' in params:
+            self.scaled_rg_cb.setChecked(params['calculate_scaled_rg'])
+        if 'calculate_diffusion' in params:
+            self.diffusion_cb.setChecked(params['calculate_diffusion'])
+        if 'calculate_precision' in params:
+            self.precision_cb.setChecked(params['calculate_precision'])
+        if 'interpolate_trajectories' in params:
+            self.interpolate_cb.setChecked(params['interpolate_trajectories'])
+
+        # Thresholds
         if 'mobility_threshold' in params:
             self.mobility_threshold_spin.setValue(params['mobility_threshold'])
+        if 'linear_eigenvalue_threshold' in params:
+            self.eigenvalue_threshold_spin.setValue(params['linear_eigenvalue_threshold'])
+        if 'linear_alignment_threshold' in params:
+            self.alignment_threshold_spin.setValue(params['linear_alignment_threshold'])
 
+        # Density radii
+        if 'density_radii' in params:
+            self._set_radius_preset(params['density_radii'])
+
+    def reset_to_default(self):
+        """Reset to default values."""
+        self._reset_to_defaults()
 
 
 class ClassificationParametersWidget(ParameterWidget):
-    """Widget for classification parameters with auto-populated training data path."""
+    """Widget for classification parameters."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._setup_ui()
-        self._auto_populate_training_data()
 
     def _setup_ui(self):
         """Setup the user interface."""
@@ -505,191 +763,56 @@ class ClassificationParametersWidget(ParameterWidget):
 
         # Classification method
         self.method_combo = QComboBox()
-        self.method_combo.addItems([
-            "svm", "threshold"
-        ])
-        self.method_combo.setCurrentText("svm")
+        self.method_combo.addItems(["threshold", "svm"])
         self.method_combo.currentTextChanged.connect(self._on_method_changed)
+        self.method_combo.currentTextChanged.connect(self.valueChanged)
         layout.addRow("Classification Method:", self.method_combo)
 
-        # SVM training data file
+        # SVM training data
         svm_layout = QHBoxLayout()
-        self.training_data_edit = QLineEdit()
-        self.training_data_edit.setPlaceholderText("Path to training data...")
-        self.training_data_edit.textChanged.connect(self.valueChanged)
+        self.svm_file_edit = QLineEdit()
+        self.svm_file_edit.setPlaceholderText("Select SVM training data file...")
+        self.svm_file_edit.textChanged.connect(self.valueChanged)
 
-        self.browse_button = QPushButton("Browse...")
-        self.browse_button.clicked.connect(self._browse_training_data)
+        self.svm_browse_btn = QPushButton("Browse...")
+        self.svm_browse_btn.clicked.connect(self._browse_svm_file)
 
-        # Add auto-detect button
-        self.auto_detect_button = QPushButton("🔍 Auto-Detect")
-        self.auto_detect_button.setToolTip("Automatically find default training data")
-        self.auto_detect_button.clicked.connect(self._auto_populate_training_data)
+        svm_layout.addWidget(self.svm_file_edit)
+        svm_layout.addWidget(self.svm_browse_btn)
 
-        svm_layout.addWidget(self.training_data_edit)
-        svm_layout.addWidget(self.browse_button)
-        svm_layout.addWidget(self.auto_detect_button)
-        layout.addRow("Training Data:", svm_layout)
+        layout.addRow("SVM Training Data:", svm_layout)
 
-        # Status indicator for training data
-        self.training_status_label = QLabel()
-        self.training_status_label.setStyleSheet("QLabel { font-size: 9px; }")
-        layout.addRow("", self.training_status_label)
-
-        # SVM features
-        features_group = QGroupBox("SVM Features")
-        features_layout = QVBoxLayout(features_group)
-
-        self.feature_list = QListWidget()
-        self.feature_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
-
-        # Add common features
-        features = [
-            'radius_gyration', 'asymmetry', 'fracDimension',
-            'netDispl', 'Straight', 'kurtosis', 'skewness',
-            'velocity', 'diffusion_coefficient'
-        ]
-
-        for feature in features:
-            self.feature_list.addItem(feature)
-
-        # Select default features
-        default_features = [
-            'radius_gyration', 'asymmetry', 'fracDimension',
-            'netDispl', 'Straight', 'kurtosis'
-        ]
-
-        for i in range(self.feature_list.count()):
-            item = self.feature_list.item(i)
-            if item.text() in default_features:
-                item.setSelected(True)
-
-        self.feature_list.itemSelectionChanged.connect(self.valueChanged)
-        features_layout.addWidget(self.feature_list)
-
-        layout.addRow(features_group)
-
-        # Threshold parameters
-        self.threshold_params_group = QGroupBox("Threshold Parameters")
-        threshold_layout = QFormLayout(self.threshold_params_group)
-
+        # Mobility threshold
         self.mobility_threshold_spin = QDoubleSpinBox()
         self.mobility_threshold_spin.setRange(0.1, 10.0)
         self.mobility_threshold_spin.setValue(2.11)
         self.mobility_threshold_spin.setDecimals(3)
         self.mobility_threshold_spin.valueChanged.connect(self.valueChanged)
-        threshold_layout.addRow("Mobility Threshold:", self.mobility_threshold_spin)
+        layout.addRow("Mobility Threshold:", self.mobility_threshold_spin)
 
-        layout.addRow(self.threshold_params_group)
-
-        # Initialize visibility
-        self._on_method_changed("svm")
-
-    def _auto_populate_training_data(self):
-        """Auto-populate the training data path if available."""
-        try:
-            # Import path utilities
-            from particle_tracker.utils.path_utils import get_default_training_data_path
-
-            default_path = get_default_training_data_path()
-            if default_path:
-                self.training_data_edit.setText(default_path)
-                self.training_status_label.setText("✅ Default training data found")
-                self.training_status_label.setStyleSheet("QLabel { color: green; font-size: 9px; }")
-                self.logger.info(f"Auto-populated training data path: {default_path}")
-            else:
-                self.training_status_label.setText("⚠️ Default training data not found")
-                self.training_status_label.setStyleSheet("QLabel { color: orange; font-size: 9px; }")
-
-        except ImportError:
-            # Fallback if path_utils not available
-            self.training_status_label.setText("ℹ️ Auto-detection not available")
-            self.training_status_label.setStyleSheet("QLabel { color: gray; font-size: 9px; }")
-        except Exception as e:
-            self.logger.warning(f"Error auto-populating training data: {e}")
-            self.training_status_label.setText("❌ Auto-detection failed")
-            self.training_status_label.setStyleSheet("QLabel { color: red; font-size: 9px; }")
-
-    def _validate_training_data_path(self, path: str):
-        """Validate the training data path and update status."""
-        if not path:
-            self.training_status_label.setText("")
-            return
-
-        from pathlib import Path
-
-        if Path(path).exists():
-            try:
-                # Try to load and validate the CSV
-                import pandas as pd
-                df = pd.read_csv(path, nrows=5)  # Just check first few rows
-
-                # Check for required columns
-                required_columns = ['Elected_Label']
-                if all(col in df.columns for col in required_columns):
-                    self.training_status_label.setText("✅ Valid training data")
-                    self.training_status_label.setStyleSheet("QLabel { color: green; font-size: 9px; }")
-                else:
-                    self.training_status_label.setText("⚠️ Missing required columns")
-                    self.training_status_label.setStyleSheet("QLabel { color: orange; font-size: 9px; }")
-
-            except Exception as e:
-                self.training_status_label.setText("❌ Invalid CSV format")
-                self.training_status_label.setStyleSheet("QLabel { color: red; font-size: 9px; }")
-        else:
-            self.training_status_label.setText("❌ File not found")
-            self.training_status_label.setStyleSheet("QLabel { color: red; font-size: 9px; }")
+        # Update initial state
+        self._on_method_changed("threshold")
 
     def _on_method_changed(self, method: str):
         """Handle classification method change."""
-        # Show/hide relevant parameter groups
-        if method == "svm":
-            self.training_data_edit.setEnabled(True)
-            self.browse_button.setEnabled(True)
-            self.auto_detect_button.setEnabled(True)
-            self.feature_list.setEnabled(True)
-            self.threshold_params_group.setVisible(False)
+        is_svm = method == "svm"
+        self.svm_file_edit.setEnabled(is_svm)
+        self.svm_browse_btn.setEnabled(is_svm)
 
-            # Validate current path
-            current_path = self.training_data_edit.text()
-            if current_path:
-                self._validate_training_data_path(current_path)
-
-        elif method == "threshold":
-            self.training_data_edit.setEnabled(False)
-            self.browse_button.setEnabled(False)
-            self.auto_detect_button.setEnabled(False)
-            self.feature_list.setEnabled(False)
-            self.threshold_params_group.setVisible(True)
-            self.training_status_label.setText("")
-
-    def _browse_training_data(self):
-        """Browse for training data file."""
-        # Start from training data directory if it exists
-        try:
-            from particle_tracker.utils.path_utils import get_training_data_directory
-            start_dir = str(get_training_data_directory())
-        except:
-            start_dir = ""
-
+    def _browse_svm_file(self):
+        """Browse for SVM training data file."""
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Select Training Data", start_dir,
+            self, "Select SVM Training Data", "",
             "CSV Files (*.csv);;All Files (*)"
         )
         if file_path:
-            self.training_data_edit.setText(file_path)
-            self._validate_training_data_path(file_path)
+            self.svm_file_edit.setText(file_path)
 
     def get_value(self) -> Dict[str, Any]:
         """Get classification parameters."""
-        selected_features = [
-            item.text() for item in self.feature_list.selectedItems()
-        ]
-
         return {
             'classification_method': self.method_combo.currentText(),
-            'svm_training_data': self.training_data_edit.text(),
-            'svm_features': selected_features,
+            'svm_training_data': self.svm_file_edit.text(),
             'mobility_threshold': self.mobility_threshold_spin.value()
         }
 
@@ -698,27 +821,19 @@ class ClassificationParametersWidget(ParameterWidget):
         if 'classification_method' in params:
             self.method_combo.setCurrentText(params['classification_method'])
         if 'svm_training_data' in params:
-            self.training_data_edit.setText(params['svm_training_data'])
-            self._validate_training_data_path(params['svm_training_data'])
-        if 'svm_features' in params:
-            # Clear selection and select specified features
-            self.feature_list.clearSelection()
-            for i in range(self.feature_list.count()):
-                item = self.feature_list.item(i)
-                if item.text() in params['svm_features']:
-                    item.setSelected(True)
+            self.svm_file_edit.setText(params['svm_training_data'])
         if 'mobility_threshold' in params:
             self.mobility_threshold_spin.setValue(params['mobility_threshold'])
 
-    def showEvent(self, event):
-        """Called when widget is shown - good time to auto-populate."""
-        super().showEvent(event)
-        if not self.training_data_edit.text():  # Only auto-populate if empty
-            self._auto_populate_training_data()
+    def reset_to_default(self):
+        """Reset to default values."""
+        self.method_combo.setCurrentText("threshold")
+        self.svm_file_edit.clear()
+        self.mobility_threshold_spin.setValue(2.11)
 
 
 class ParameterPanelManager(QWidget):
-    """Manager widget for all parameter panels."""
+    """Enhanced manager widget for all parameter panels."""
 
     parametersChanged = pyqtSignal()
 
@@ -749,12 +864,12 @@ class ParameterPanelManager(QWidget):
         scroll_linking.setWidgetResizable(True)
         self.tab_widget.addTab(scroll_linking, "Linking")
 
-        # Feature parameters tab
-        self.feature_widget = FeatureParametersWidget()
-        scroll_feature = QScrollArea()
-        scroll_feature.setWidget(self.feature_widget)
-        scroll_feature.setWidgetResizable(True)
-        self.tab_widget.addTab(scroll_feature, "Features")
+        # Enhanced feature parameters tab
+        self.enhanced_feature_widget = EnhancedFeatureParametersWidget()
+        scroll_enhanced = QScrollArea()
+        scroll_enhanced.setWidget(self.enhanced_feature_widget)
+        scroll_enhanced.setWidgetResizable(True)
+        self.tab_widget.addTab(scroll_enhanced, "Enhanced Features")
 
         # Classification parameters tab
         self.classification_widget = ClassificationParametersWidget()
@@ -786,89 +901,43 @@ class ParameterPanelManager(QWidget):
         """Connect parameter change signals."""
         self.detection_widget.valueChanged.connect(self.parametersChanged)
         self.linking_widget.valueChanged.connect(self.parametersChanged)
-        self.feature_widget.valueChanged.connect(self.parametersChanged)
+        self.enhanced_feature_widget.valueChanged.connect(self.parametersChanged)
         self.classification_widget.valueChanged.connect(self.parametersChanged)
 
-    def get_detection_parameters(self) -> Dict[str, Any]:
-        """Get detection parameters."""
-        return self.detection_widget.get_value()
+    def get_all_parameters(self) -> Dict[str, Any]:
+        """Get all parameters including enhanced features."""
+        detection_params = self.detection_widget.get_value()
+        linking_params = self.linking_widget.get_value()
+        enhanced_feature_params = self.enhanced_feature_widget.get_value()
+        classification_params = self.classification_widget.get_value()
 
-    def get_linking_parameters(self) -> Dict[str, Any]:
-        """Get linking parameters."""
-        return self.linking_widget.get_value()
+        # Merge all parameters
+        all_params = {}
+        all_params.update(detection_params)
+        all_params.update(linking_params)
+        all_params.update(enhanced_feature_params)
+        all_params.update(classification_params)
 
-    def get_feature_parameters(self) -> Dict[str, Any]:
-        """Get feature parameters."""
-        return self.feature_widget.get_value()
-
-    def get_classification_parameters(self) -> Dict[str, Any]:
-        """Get classification parameters."""
-        return self.classification_widget.get_value()
-
-    def get_all_parameters(self) -> AnalysisParameters:
-        """Get all parameters as AnalysisParameters object."""
-        detection_params = self.get_detection_parameters()
-        linking_params = self.get_linking_parameters()
-        feature_params = self.get_feature_parameters()
-        classification_params = self.get_classification_parameters()
-
-        # Create AnalysisParameters object
-        params = AnalysisParameters()
-
-        # Update with current values from detection parameters
-        params.detection_method = detection_params.get('detection_method', params.detection_method)
-        params.detection_sigma = detection_params.get('detection_sigma', params.detection_sigma)
-        params.detection_threshold = detection_params.get('detection_threshold', params.detection_threshold)
-
-        # Update with current values from linking parameters
-        params.linking_method = linking_params.get('linking_method', params.linking_method)
-        params.max_distance = linking_params.get('max_distance', params.max_distance)
-        params.max_gap_frames = linking_params.get('max_gap_frames', params.max_gap_frames)
-        params.min_track_length = linking_params.get('min_track_length', params.min_track_length)
-
-        # Update with current values from feature parameters
-        params.pixel_size = feature_params.get('pixel_size', params.pixel_size)
-        params.frame_rate = feature_params.get('frame_rate', params.frame_rate)
-        params.mobility_threshold = feature_params.get('mobility_threshold', params.mobility_threshold)
-
-        # Update with current values from classification parameters
-        params.svm_training_data = classification_params.get('svm_training_data')
-        params.svm_features = classification_params.get('svm_features', params.svm_features)
-
-        # Create a comprehensive parameter dictionary that includes ALL parameters
-        # This ensures that parameters not in the AnalysisParameters dataclass are still available
-        all_params_dict = {}
-        all_params_dict.update(detection_params)
-        all_params_dict.update(linking_params)
-        all_params_dict.update(feature_params)
-        all_params_dict.update(classification_params)
-
-        # Convert AnalysisParameters to dict and merge
-        params_dict = asdict(params)
-        params_dict.update(all_params_dict)
-
-        # Return the merged dictionary instead of just the AnalysisParameters object
-        # This ensures all GUI parameters are available to the analysis engine
-        return params_dict
+        return all_params
 
     def set_all_parameters(self, params):
-        """Set all parameters from AnalysisParameters object or dict."""
+        """Set all parameters including enhanced features."""
         if hasattr(params, '__dict__'):
             params_dict = asdict(params) if hasattr(params, '__dataclass_fields__') else params.__dict__
         else:
             params_dict = params
 
-        # Split parameters by category and set them
+        # Set parameters for each widget
         self.detection_widget.set_value(params_dict)
         self.linking_widget.set_value(params_dict)
-        self.feature_widget.set_value(params_dict)
+        self.enhanced_feature_widget.set_value(params_dict)
         self.classification_widget.set_value(params_dict)
 
     def _reset_all_parameters(self):
         """Reset all parameters to defaults."""
         default_params = AnalysisParameters()
         self.set_all_parameters(default_params)
-        self.logger.info("Parameters reset to defaults")
+        self.logger.info("Parameters reset to enhanced defaults")
 
     def _save_parameters(self):
         """Save current parameters to file."""
@@ -885,10 +954,10 @@ class ParameterPanelManager(QWidget):
                 with open(file_path, 'w') as f:
                     json.dump(params, f, indent=2)
 
-                self.logger.info(f"Parameters saved to {file_path}")
+                self.logger.info(f"Enhanced parameters saved to {file_path}")
 
             except Exception as e:
-                self.logger.error(f"Error saving parameters: {e}")
+                self.logger.error(f"Error saving enhanced parameters: {e}")
 
     def _load_parameters(self):
         """Load parameters from file."""
@@ -905,7 +974,7 @@ class ParameterPanelManager(QWidget):
                     params_dict = json.load(f)
 
                 self.set_all_parameters(params_dict)
-                self.logger.info(f"Parameters loaded from {file_path}")
+                self.logger.info(f"Enhanced parameters loaded from {file_path}")
 
             except Exception as e:
-                self.logger.error(f"Error loading parameters: {e}")
+                self.logger.error(f"Error loading enhanced parameters: {e}")

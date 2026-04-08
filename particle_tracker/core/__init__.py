@@ -8,9 +8,9 @@ Contains the core functionality for the particle tracking application:
 - ProjectManager: Manages projects and settings
 """
 
-from .data_manager import DataManager, DataType, DataInfo
+from .data_manager import EnhancedDataManager as DataManager, DataType, DataInfo
 from .analysis_engine import AnalysisEngine, AnalysisParameters, AnalysisStep, AnalysisWorker
-from .project_manager import ProjectManager, ProjectInfo
+from .project_manager import EnhancedProjectManager as ProjectManager, ProjectInfo
 
 __all__ = [
     "DataManager",

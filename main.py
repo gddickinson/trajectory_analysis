@@ -4,8 +4,9 @@ from pathlib import Path
 
 def main():
     try:
-        from particle_tracker.app import ParticleTrackingApp
-        app = ParticleTrackingApp(sys.argv, debug="--debug" in sys.argv)
+        # Import the correct class name from app.py
+        from particle_tracker.app import EnhancedParticleTrackingApp
+        app = EnhancedParticleTrackingApp(sys.argv, debug="--debug" in sys.argv)
         return app.exec()
     except ImportError as e:
         print(f"Error: {e}")

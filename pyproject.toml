@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "particle-tracker-enhanced"
+version = "2.0.0"
+description = "Enhanced particle tracking application with advanced analysis modules for microscopy data"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.8"
+dependencies = [
+    "numpy>=1.21.0,<2.0.0",
+    "pandas>=1.3.0,<3.0.0",
+    "scipy>=1.7.0,<2.0.0",
+    "scikit-learn>=1.0.0,<2.0.0",
+    "scikit-image>=0.18.0,<1.0.0",
+    "PyQt6>=6.0.0,<7.0.0",
+    "pyqtgraph>=0.12.0,<1.0.0",
+    "matplotlib>=3.4.0,<4.0.0",
+    "tqdm>=4.60.0,<5.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0.0",
+    "pytest-qt>=4.0.0",
+    "black>=21.0.0",
+    "flake8>=3.9.0",
+]
+optional = [
+    "trackpy>=0.5.0",
+    "opencv-python>=4.5.0",
+    "numba>=0.54.0",
+]
+
+[project.scripts]
+particle-tracker-enhanced = "particle_tracker.app:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

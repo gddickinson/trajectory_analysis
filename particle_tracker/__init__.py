@@ -20,23 +20,24 @@ Example usage:
     app.exec()
 """
 
-__version__ = "1.0.0"
-__author__ = "Your Name"
-__email__ = "your.email@example.com"
+__version__ = "2.0.0"
+__author__ = "Particle Tracking Team"
+__email__ = "support@particletracking.com"
 
 # Import main application class
 try:
-    from .app import ParticleTrackingApp
+    from .app import EnhancedParticleTrackingApp, ParticleTrackingApp
 except ImportError:
     # Handle case where GUI dependencies are not available
+    EnhancedParticleTrackingApp = None
     ParticleTrackingApp = None
     import warnings
     warnings.warn("GUI components not available. Install PyQt6 for full functionality.")
 
 # Import core components
-from .core.data_manager import DataManager, DataType, DataInfo
+from .core.data_manager import EnhancedDataManager as DataManager
 from .core.analysis_engine import AnalysisEngine, AnalysisParameters, AnalysisStep
-from .core.project_manager import ProjectManager, ProjectInfo
+from .core.project_manager import EnhancedProjectManager as ProjectManager
 
 # Import analysis components
 from .analysis.detection import ParticleDetector
@@ -45,23 +46,21 @@ from .analysis.features import FeatureCalculator
 from .analysis.classification import TrajectoryClassifier
 
 # Import utilities
-from .utils.config_manager import ConfigManager, ApplicationConfig
+from .utils.config_manager import ConfigManager
 from .utils.logging_config import setup_logging
 
 # Define what gets imported with "from particle_tracker import *"
 __all__ = [
     # Main application
     "ParticleTrackingApp",
+    "EnhancedParticleTrackingApp",
 
     # Core components
     "DataManager",
-    "DataType",
-    "DataInfo",
     "AnalysisEngine",
     "AnalysisParameters",
     "AnalysisStep",
     "ProjectManager",
-    "ProjectInfo",
 
     # Analysis components
     "ParticleDetector",
@@ -71,7 +70,6 @@ __all__ = [
 
     # Utilities
     "ConfigManager",
-    "ApplicationConfig",
     "setup_logging",
 
     # Version info
@@ -85,7 +83,7 @@ __title__ = "particle-tracker"
 __description__ = "A comprehensive application for analyzing particle trajectories from microscopy data"
 __url__ = "https://github.com/yourusername/particle-tracker"
 __license__ = "MIT"
-__copyright__ = "Copyright 2024 Your Name"
+__copyright__ = "Copyright 2024 Particle Tracking Team"
 
 # Minimum required versions for key dependencies
 __requires__ = [

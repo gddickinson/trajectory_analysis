@@ -12,9 +12,9 @@ Contains all analysis algorithms and methods:
 from .detection import (
     ParticleDetector,
     DetectionMethod,
-    ThresholdDetection,
-    LoGDetection,
-    TrackpyDetection
+    EnhancedThresholdDetection as ThresholdDetection,
+    EnhancedLoGDetection as LoGDetection,
+    EnhancedTrackpyDetection as TrackpyDetection
 )
 
 from .linking import (
