@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "trajectory_analysis"
+abstract: "A comprehensive, modular application for analyzing particle trajectories from TIRF microscopy recordings and other single-molecule imaging data."
+authors:
+  - family-names: Dickinson
+    given-names: "George D."
+    orcid: https://orcid.org/0000-0001-7711-0388
+    affiliation: University of California, Irvine
+repository-code: "https://github.com/gddickinson/trajectory_analysis"
+url: "https://github.com/gddickinson/trajectory_analysis"
+license: MIT
+date-released: 2025-06-03
