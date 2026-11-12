@@ -3,3 +3,5 @@
 /particle_tracker/gui/__pycache__
 /particle_tracker/resources/__pycache__
 /particle_tracker/utils/__pycache__
+__pycache__/
+site/

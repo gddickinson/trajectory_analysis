@@ -24,30 +24,43 @@ __version__ = "2.0.0"
 __author__ = "Particle Tracking Team"
 __email__ = "support@particletracking.com"
 
-# Import main application class
-try:
-    from .app import EnhancedParticleTrackingApp, ParticleTrackingApp
-except ImportError:
-    # Handle case where GUI dependencies are not available
-    EnhancedParticleTrackingApp = None
-    ParticleTrackingApp = None
-    import warnings
-    warnings.warn("GUI components not available. Install PyQt6 for full functionality.")
+# Public classes are imported lazily (PEP 562) so that pure analysis modules, e.g.
+# particle_tracker.analysis.features or the web interface, can be imported without PyQt6.
+# "from particle_tracker import X" works exactly as before.
+_LAZY = {
+    "EnhancedParticleTrackingApp": (".app", "EnhancedParticleTrackingApp"),
+    "ParticleTrackingApp": (".app", "ParticleTrackingApp"),
+    "DataManager": (".core.data_manager", "EnhancedDataManager"),
+    "AnalysisEngine": (".core.analysis_engine", "AnalysisEngine"),
+    "AnalysisParameters": (".core.analysis_engine", "AnalysisParameters"),
+    "AnalysisStep": (".core.analysis_engine", "AnalysisStep"),
+    "ProjectManager": (".core.project_manager", "EnhancedProjectManager"),
+    "ParticleDetector": (".analysis.detection", "ParticleDetector"),
+    "ParticleLinker": (".analysis.linking", "ParticleLinker"),
+    "FeatureCalculator": (".analysis.features", "FeatureCalculator"),
+    "TrajectoryClassifier": (".analysis.classification", "TrajectoryClassifier"),
+    "ConfigManager": (".utils.config_manager", "ConfigManager"),
+    "setup_logging": (".utils.logging_config", "setup_logging"),
+}
 
-# Import core components
-from .core.data_manager import EnhancedDataManager as DataManager
-from .core.analysis_engine import AnalysisEngine, AnalysisParameters, AnalysisStep
-from .core.project_manager import EnhancedProjectManager as ProjectManager
 
-# Import analysis components
-from .analysis.detection import ParticleDetector
-from .analysis.linking import ParticleLinker
-from .analysis.features import FeatureCalculator
-from .analysis.classification import TrajectoryClassifier
+def __getattr__(name):
+    if name not in _LAZY:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    import importlib
+    module, attr = _LAZY[name]
+    try:
+        value = getattr(importlib.import_module(module, __name__), attr)
+    except ImportError:
+        if module != ".app":
+            raise
+        # Handle case where GUI dependencies are not available
+        import warnings
+        warnings.warn("GUI components not available. Install PyQt6 for full functionality.")
+        value = None
+    globals()[name] = value
+    return value
 
-# Import utilities
-from .utils.config_manager import ConfigManager
-from .utils.logging_config import setup_logging
 
 # Define what gets imported with "from particle_tracker import *"
 __all__ = [
