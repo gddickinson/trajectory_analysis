@@ -419,9 +419,17 @@ class FeatureCalculator:
         """
         self.logger.info("Starting enhanced feature calculation")
 
-        # Merge parameters
+        # Merge parameters; the steps below read self.parameters, so use the merged set for this call only
         params = {**self.parameters, **kwargs}
+        saved = self.parameters
+        self.parameters = params
+        try:
+            return self._calculate_all(df, params)
+        finally:
+            self.parameters = saved
 
+    def _calculate_all(self, df: pd.DataFrame, params: dict) -> pd.DataFrame:
+        """The feature steps of calculate_features, with params already merged into self.parameters."""
         # Start with basic trajectory features
         result_df = self._calculate_basic_features(df)
 
