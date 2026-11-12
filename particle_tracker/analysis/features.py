@@ -472,22 +472,25 @@ class FeatureCalculator:
         return df
 
     def _calculate_nearest_neighbors(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Calculate nearest neighbor distances."""
-        nn_distances = []
+        """Calculate nearest neighbor distances (within each frame; NaN when alone in the frame).
+
+        Distances are written back by row position, so the table need not be sorted by frame.
+        """
+        nn_distance = np.full(len(df), np.nan)
+        frames = df['frame'].values
+        xy = df[['x', 'y']].values
 
         for frame in df['frame'].unique():
-            frame_data = df[df['frame'] == frame]
+            rows = np.flatnonzero(frames == frame)
 
-            if len(frame_data) < 2:
-                nn_distances.extend([np.nan] * len(frame_data))
+            if len(rows) < 2:
                 continue
 
-            positions = frame_data[['x', 'y']].values
-            tree = KDTree(positions)
-            distances, indices = tree.query(positions, k=2)
-            nn_distances.extend(distances[:, 1])  # Second nearest (first is self)
+            tree = KDTree(xy[rows])
+            distances, indices = tree.query(xy[rows], k=2)
+            nn_distance[rows] = distances[:, 1]  # Second nearest (first is self)
 
-        df['nn_distance'] = nn_distances
+        df['nn_distance'] = nn_distance
         return df
 
     def _calculate_advanced_shape_features(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -495,7 +498,7 @@ class FeatureCalculator:
         advanced_features = []
 
         for track_id in tqdm(df['track_number'].unique(), desc="Advanced shape analysis"):
-            track_data = df[df['track_number'] == track_id]
+            track_data = df[df['track_number'] == track_id].sort_values('frame')
             positions = track_data[['x', 'y']].values
 
             # Calculate advanced metrics
