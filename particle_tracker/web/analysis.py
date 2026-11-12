@@ -19,7 +19,6 @@ import os
 
 os.environ.setdefault("TQDM_DISABLE", "1")   # the analysis classes draw tqdm progress bars
 
-import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 from ..analysis.advanced_metrics import AdvancedMetricsCalculator  # noqa: E402
@@ -77,7 +76,6 @@ def analyse(df: pd.DataFrame, p: dict, name: str) -> dict:
         f = per_track.loc[t]
         frames = g["frame"].values
         r = ac.calculate_track_autocorrelation(g, p["autocorr_max_lag"])
-        vals = np.asarray(r["autocorr_values"], dtype=float)
         row = {"track": key(t), "n_points": int(len(g)), "duration_frames": int(frames.max() - frames.min() + 1),
                "missing_frames": int(frames.max() - frames.min() + 1 - len(g))}
         row.update({k: clean(f[c]) for k, c in FEATURES.items()})
@@ -87,7 +85,7 @@ def analyse(df: pd.DataFrame, p: dict, name: str) -> dict:
         row["msd_D"] = clean(msd.loc[t, "diffusion_coefficient_advanced"])
         row["autocorr_steps"] = int(r["n_steps"])
         row["persistence_length"] = clean(r["persistence_length"])
-        row["persistence_censored"] = censored(vals)
+        row["persistence_censored"] = bool(r["persistence_censored"])
         row["directional_bias"] = clean(r["directional_bias"])
         if labels is not None:
             row["label"] = labels.loc[t]
@@ -100,7 +98,7 @@ def analyse(df: pd.DataFrame, p: dict, name: str) -> dict:
                     "mean": [clean(v) for v in ens["ensemble_autocorr"]],
                     "std": [clean(v) for v in ens["ensemble_std"]],
                     "persistence_length": clean(ens["ensemble_persistence_length"]),
-                    "persistence_censored": censored(np.asarray(ens["ensemble_autocorr"], dtype=float))}
+                    "persistence_censored": ac._persistence_censored(ens["ensemble_autocorr"])}
 
     return {
         "name": name, "computed_by": "python", "params": p,
@@ -110,14 +108,6 @@ def analyse(df: pd.DataFrame, p: dict, name: str) -> dict:
         "has_labels": labels is not None,
         "tracks": tracks, "autocorr_ensemble": ensemble, "density": density(feats),
     }
-
-
-def censored(autocorr: np.ndarray) -> bool:
-    """True when the persistence length is the analyser's fallback (2 x last lag): no 1/e crossing in range."""
-    v = autocorr[~np.isnan(autocorr)]
-    if len(v) < 2 or v[0] <= 0:
-        return False
-    return not bool(np.any(v <= v[0] / np.e))
 
 
 def density(feats: pd.DataFrame) -> dict:

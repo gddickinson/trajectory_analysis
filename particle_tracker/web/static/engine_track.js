@@ -6,7 +6,7 @@
 //  msdFit            advanced_metrics._calculate_advanced_diffusion_metrics: MSD at 1..min(n-1, 10) frame lags
 //                    (pairs exactly that many frames apart), log-log fit of the first 5 -> alpha, D = exp(b) / 4
 //  autocorrelation   autocorrelation_analysis.calculate_track_autocorrelation (lags = start-frame differences)
-//  persistence       _calculate_persistence_length (1/e crossing; 2 x last lag when there is none)
+//  persistence       _calculate_persistence_length (1/e crossing; censored at the last lag when there is none)
 //  ensembleAutocorr  calculate_ensemble_autocorrelation (mean and SD over tracks, common lag range)
 import { eigSym2, linregress, mean, nanMean, skewKurt, std } from './engine_stats.js';
 
@@ -127,7 +127,7 @@ export function persistence(lags, ac) {
   ac.forEach((v, i) => { if (!Number.isNaN(v)) { vl.push(lags[i]); va.push(v); } });
   if (va.length < 2 || va[0] <= 0) return { value: NaN, censored: false };
   const target = va[0] / Math.E, c = va.findIndex(v => v <= target);
-  if (c < 0) return { value: vl[vl.length - 1] * 2, censored: true };
+  if (c < 0) return { value: vl[vl.length - 1], censored: true };   // censored: only known to exceed the last lag
   if (c === 0) return { value: vl[0], censored: false };
   const [x1, x2, y1, y2] = [vl[c - 1], vl[c], va[c - 1], va[c]];
   return { value: y2 !== y1 ? x1 + (target - y1) * (x2 - x1) / (y2 - y1) : x1, censored: false };

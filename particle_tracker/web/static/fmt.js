@@ -77,7 +77,7 @@ export const TRACK_EXPORT = [
   ['fracDimension', 'fractal_dimension', v => v], ['netDispl', 'net_displacement_um', 'um'], ['Straight', 'straightness', v => v],
   ['mean_step_size', 'mean_step_um', 'um'], ['meanVelocity', 'mean_velocity_um_per_s', 'speed'],
   ['msd_alpha', 'msd_alpha', v => v], ['msd_D', 'msd_D_um2_per_s', 'D'],
-  ['persistence_length', 'persistence_s', 's'], ['persistence_censored', 'persistence_no_1_over_e_crossing', v => v],
+  ['persistence_length', 'persistence_s', 's'], ['persistence_censored', 'persistence_censored_lower_bound', v => v],
   ['directional_bias', 'directional_bias', v => v],
 ];
 

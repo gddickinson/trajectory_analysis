@@ -32,10 +32,10 @@ route('motion', async () => {
       ${e ? `<p class="small mute">Mean ± SD over tracks of the per-track curves, over the lag range every track reaches
         (${e.lags.length} lag${e.lags.length === 1 ? '' : 's'} here: set by the track with the fewest steps; shortest track ${shortest} points).
         Raise the minimum track length on <a href="#/analyze">Analyze</a> for a longer curve. Ensemble persistence:
-        ${e.persistence_censored ? `no 1/e drop within ${e.lags.length} lags` : fu(u.s(e.persistence_length), 's')}.</p>` : ''}</div>
+        ${e.persistence_censored ? `&gt; ${fu(u.s(e.persistence_length), 's')} (no 1/e drop)` : fu(u.s(e.persistence_length), 's')}.</p>` : ''}</div>
     <div class="panel"><h3>Persistence time</h3>${histogram(persist.map(q => ({ v: u.s(q.persistence_length), c: q.mobility_classification })), { xlabel: 'lag where the autocorrelation falls to 1/e of lag 1 (s)' })}
-      <p class="small mute">${cens} tracks whose autocorrelation never falls to 1/e within ${p.autocorr_max_lag} lags are left out
-        (the analyser reports twice the last lag for them). Undefined when the lag-1 value is ≤ 0.</p></div>
+      <p class="small mute">${cens} tracks whose autocorrelation never falls to 1/e within their lags are left out: their persistence is
+        censored (only known to exceed the last lag, reported as “&gt; last lag”). Undefined when the lag-1 value is ≤ 0.</p></div>
     <div class="panel"><h3>Directional bias</h3>${histogram(by(q => num(q.directional_bias)), { xlabel: 'mean autocorrelation over lags', range: [-1, 1], bins: 20 })}
       <p class="small mute">Positive: steps keep their direction; negative: they reverse (typical of confinement or localisation noise).</p></div>
   </div>`;

@@ -39,8 +39,8 @@ route('method', async () => {
   <h2>Direction autocorrelation (<code>autocorrelation_analysis.DirectionAutocorrelationAnalyzer</code>)</h2>
   <p>Unit vectors of the non-zero steps; the value at a lag of k frames is the mean dot product of steps that start k frames apart,
     for k = 1 to min(${d.autocorr_max_lag}, number of non-zero steps − 1). <b>Persistence</b>: the lag where the curve first drops to
-    1/e of its lag-1 value (linear interpolation); when it never does, the analyser reports 2 × the last lag, which this site
-    marks as “no 1/e drop” instead of showing it as a measurement. <b>Directional bias</b>: mean of the curve. The <b>ensemble</b>
+    1/e of its lag-1 value (linear interpolation); when it never does, the persistence is censored and reported as
+    “&gt; last lag” (left out of averages). <b>Directional bias</b>: mean of the curve. The <b>ensemble</b>
     is the mean ± SD over tracks at each lag, over the lags every track reaches. The analyser's exponential-decay fit is not shown.</p>
   <h2>Density (<code>features.DensityAnalyzer</code>, <code>FeatureCalculator._calculate_nearest_neighbors</code>)</h2>
   <p>Per frame: the distance from each localisation to its nearest neighbour (undefined when alone) and the number of others within

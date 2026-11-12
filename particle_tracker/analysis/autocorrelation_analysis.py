@@ -129,6 +129,7 @@ class DirectionAutocorrelationAnalyzer:
             'lags': lags,
             'autocorr_values': autocorr_values,
             'persistence_length': persistence_length,
+            'persistence_censored': self._persistence_censored(autocorr_values),
             'directional_bias': directional_bias,
             'decay_constant': decay_params['decay_constant'],
             'decay_amplitude': decay_params['amplitude'],
@@ -145,6 +146,7 @@ class DirectionAutocorrelationAnalyzer:
             'lags': np.array([]),
             'autocorr_values': np.array([]),
             'persistence_length': np.nan,
+            'persistence_censored': False,
             'directional_bias': np.nan,
             'decay_constant': np.nan,
             'decay_amplitude': np.nan,
@@ -161,7 +163,8 @@ class DirectionAutocorrelationAnalyzer:
             autocorr: Autocorrelation values
 
         Returns:
-            Persistence length (lag where autocorr drops to 1/e of initial value)
+            Persistence length (lag where autocorr drops to 1/e of initial value); when it never does, the last
+            lag as a lower bound (see _persistence_censored)
         """
         valid_mask = ~np.isnan(autocorr)
         if np.sum(valid_mask) < 2:
@@ -197,8 +200,19 @@ class DirectionAutocorrelationAnalyzer:
                 
                 return persistence_length
 
-        # If no crossing found, extrapolate
-        return valid_lags[-1] * 2  # Conservative estimate
+        # No crossing within the measured lags: the persistence length is only known to exceed the last lag.
+        # Return that lower bound; _persistence_censored() flags the case (it used to return 2 x last lag).
+        return valid_lags[-1]
+
+    @staticmethod
+    def _persistence_censored(autocorr: np.ndarray) -> bool:
+        """True when the curve never falls to 1/e of its first value, so the persistence length is censored:
+        it is longer than the last lag returned by _calculate_persistence_length."""
+        v = np.asarray(autocorr, dtype=float)
+        v = v[~np.isnan(v)]
+        if len(v) < 2 or v[0] <= 0:
+            return False
+        return not bool(np.any(v <= v[0] / np.e))
 
     def _fit_exponential_decay(self, lags: np.ndarray, autocorr: np.ndarray) -> Dict[str, float]:
         """
@@ -323,15 +337,16 @@ class DirectionAutocorrelationAnalyzer:
             return {}
 
         # Extract metrics
-        persistence_lengths = [r['persistence_length'] for r in autocorr_results 
-                             if not np.isnan(r['persistence_length'])]
+        # Censored values (no 1/e drop: only a lower bound) are left out of the persistence statistics and counted
+        persistence_lengths = [r['persistence_length'] for r in autocorr_results
+                             if not np.isnan(r['persistence_length']) and not r.get('persistence_censored', False)]
         directional_biases = [r['directional_bias'] for r in autocorr_results 
                             if not np.isnan(r['directional_bias'])]
         decay_constants = [r['decay_constant'] for r in autocorr_results 
                          if not np.isnan(r['decay_constant'])]
 
-        stats = {}
-        
+        stats = {'n_persistence_censored': int(sum(bool(r.get('persistence_censored', False)) for r in autocorr_results))}
+
         if persistence_lengths:
             stats['mean_persistence_length'] = np.mean(persistence_lengths)
             stats['std_persistence_length'] = np.std(persistence_lengths)

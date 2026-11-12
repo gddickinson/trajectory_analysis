@@ -73,7 +73,7 @@ route('tracks', async (args, query) => {
     $('#tb').innerHTML = list(all.slice(page * PAGE, page * PAGE + PAGE), t => `<tr class="click${t.track === selected ? ' sel' : ''}" tabindex="0" data-id="${esc(t.track)}">
       <td>${esc(t.track)}</td><td>${t.n_points}</td><td>${f(u.um(t.radius_gyration))}</td><td>${f(t.scaled_rg, 3)}</td>
       <td>${cls(t.mobility_classification)}</td><td>${cls(t.linear_classification)}</td><td>${f(t.msd_alpha, 3)}</td>
-      <td>${f(u.D(t.msd_D))}</td><td>${t.persistence_censored ? '&gt; ' : ''}${f(t.persistence_censored ? u.s(num(t.persistence_length) / 2) : u.s(t.persistence_length))}</td>
+      <td>${f(u.D(t.msd_D))}</td><td>${t.persistence_censored ? '&gt; ' : ''}${f(u.s(t.persistence_length))}</td>
       ${r.has_labels ? `<td>${esc(t.label)}</td>` : ''}</tr>`);
     $('#pg').textContent = `page ${page + 1} of ${pages} · ${all.length} tracks`;
     $$('#tb tr').forEach(tr => {
@@ -107,7 +107,7 @@ function detail(r, tracks, key, u) {
     ['net displacement', `${f(u.um(m.netDispl))} µm`], ['straightness', f(m.Straight, 3)],
     ['mean step / speed', `${f(u.um(m.mean_step_size))} µm / ${f(u.speed(m.meanVelocity))} µm/s`],
     ['MSD α / D', `${f(m.msd_alpha, 3)} / ${f(u.D(m.msd_D))} µm²/s`],
-    ['persistence', m.persistence_censored ? `no 1/e drop within ${ac.lags.length} lags (analyser reports ${f(u.s(m.persistence_length))} s = 2 × last lag)` : fu(u.s(m.persistence_length), 's')],
+    ['persistence', m.persistence_censored ? `&gt; ${f(u.s(m.persistence_length))} s (no 1/e drop within the measured lags)` : fu(u.s(m.persistence_length), 's')],
     ['directional bias', f(m.directional_bias, 3)]];
   $('#detail').innerHTML = `<h3>Track ${esc(key)} · ${cls(m.mobility_classification)} ${cls(m.linear_classification)}${m.label ? ` <span class="small mute">reference: ${esc(m.label)}</span>` : ''}</h3>
     <dl class="kv">${list(kv, ([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`)}</dl>
