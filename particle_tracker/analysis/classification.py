@@ -104,14 +104,26 @@ class TrajectoryClassifier:
         step_col = self._find_column(df, 'mean_step_length')
         track_col = self._find_column(df, 'track_number')
         
-        if not all([rg_col, step_col, track_col]):
+        x_col = self._find_column(df, 'x')
+        y_col = self._find_column(df, 'y')
+        frame_col = self._find_column(df, 'frame')
+        from_xy = not (rg_col and step_col) and all([x_col, y_col, frame_col])
+        if not track_col or not (from_xy or (rg_col and step_col)):
             self.logger.warning("Missing required columns for sRg calculation")
             return df
         
         # Calculate sRg for each track
         def calculate_srg_for_track(track_data):
-            rg = track_data[rg_col].iloc[0]
-            mean_step = track_data[step_col].iloc[0]
+            if from_xy:
+                # No Rg / mean-step columns: compute both from the coordinates (Rg with 1/N, consecutive steps)
+                xy = track_data.sort_values(frame_col)[[x_col, y_col]].to_numpy(dtype=float)
+                if len(xy) < 2:
+                    return np.nan
+                rg = np.sqrt(np.mean(np.sum((xy - xy.mean(axis=0)) ** 2, axis=1)))
+                mean_step = np.mean(np.sqrt(np.sum(np.diff(xy, axis=0) ** 2, axis=1)))
+            else:
+                rg = track_data[rg_col].iloc[0]
+                mean_step = track_data[step_col].iloc[0]
             
             if pd.isna(rg) or pd.isna(mean_step) or mean_step == 0:
                 return np.nan
@@ -521,43 +533,25 @@ class TrajectoryClassifier:
         if 'sRg' not in df.columns:
             df = self._calculate_scaled_rg(df)
         
-        # Use sRg threshold if available
+        # Use sRg threshold if available (tracks without an sRg are 'unclassified', code 0)
         if 'sRg' in df.columns:
             srg_threshold = self.parameters.get('srg_mobility_threshold', 2.22236433588659)
             
             track_col = self._find_column(df, 'track_number')
+            srg = df.groupby(track_col)['sRg'].first() if track_col else df['sRg']
+            mobility = pd.Series(np.where(srg.isna(), 0, np.where(srg > srg_threshold, 2, 1)),
+                                 index=srg.index)  # 0=unclassified, 1=immobile, 2=mobile
+            labels = mobility.map({0: 'unclassified', 1: 'immobile', 2: 'mobile'})
             if track_col:
-                track_srg = df.groupby(track_col)['sRg'].first()
-                mobility = (track_srg > srg_threshold).astype(int) + 1  # 1=immobile, 2=mobile
-                
-                mobility_series = pd.Series(mobility, name='threshold_classification')
-                df = df.join(mobility_series, on=track_col)
-                
-                mobility_labels = mobility.map({1: 'immobile', 2: 'mobile'})
-                mobility_labels.name = 'threshold_label'
-                df = df.join(mobility_labels, on=track_col)
+                df = df.join(mobility.rename('threshold_classification'), on=track_col)
+                df = df.join(labels.rename('threshold_label'), on=track_col)
             else:
-                mobility = (df['sRg'] > srg_threshold).astype(int) + 1
                 df['threshold_classification'] = mobility
-                df['threshold_label'] = mobility.map({1: 'immobile', 2: 'mobile'})
-        
+                df['threshold_label'] = labels
         else:
-            # Fallback to basic Rg threshold
-            rg_threshold = self.parameters.get('mobility_threshold', 2.11)
-            rg_col = self._find_column(df, 'radius_gyration')
-            
-            if rg_col:
-                track_col = self._find_column(df, 'track_number')
-                if track_col:
-                    rg = df.groupby(track_col)[rg_col].first()
-                    mobility = (rg > rg_threshold).astype(int) + 1
-                    
-                    mobility_series = pd.Series(mobility, name='threshold_classification')
-                    df = df.join(mobility_series, on=track_col)
-                    
-                    mobility_labels = mobility.map({1: 'immobile', 2: 'mobile'})
-                    mobility_labels.name = 'threshold_label'
-                    df = df.join(mobility_labels, on=track_col)
+            # The raw radius of gyration (pixels) is not comparable with the dimensionless sRg threshold
+            self.logger.warning("No sRg (needs x / y / frame or radius_gyration + mean step): threshold "
+                                "classification skipped")
         
         return df
 

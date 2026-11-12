@@ -82,7 +82,7 @@ class AdvancedMetricsCalculator:
                 return pd.Series({
                     'sRg': np.nan,
                     'mean_step_size': np.nan,
-                    'mobility_sRg': 'immobile'
+                    'mobility_sRg': 'unclassified'
                 })
             
             # Calculate basic radius of gyration
@@ -103,7 +103,10 @@ class AdvancedMetricsCalculator:
             
             # Classify mobility using Golan & Sherman threshold
             mobility_threshold = self.parameters.get('sRg_threshold', 2.11)
-            mobility_sRg = 'mobile' if sRg > mobility_threshold else 'immobile'
+            if np.isnan(sRg):
+                mobility_sRg = 'unclassified'
+            else:
+                mobility_sRg = 'mobile' if sRg > mobility_threshold else 'immobile'
             
             return pd.Series({
                 'sRg': sRg,
