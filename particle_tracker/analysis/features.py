@@ -289,7 +289,7 @@ class ScaledRadiusCalculator:
         """sRg (default sqrt(pi/2) * Rg / mean step, Golan & Sherman 2017); NaN if undefined."""
         return mobility.scaled_rg(radius_gyration, mean_step_size, definition)
 
-    def classify_mobility(self, scaled_rg: float, threshold: float = 2.11, n_points: int = None,
+    def classify_mobility(self, scaled_rg: float, threshold: float = mobility.MOBILITY_DEFAULTS["mobility_threshold"], n_points: int = None,
                           min_classify_length: int = 0) -> str:
         """'mobile' above the threshold, else 'immobile'; 'too_short' below min_classify_length points
         (when n_points is given); 'unclassified' if sRg is NaN."""

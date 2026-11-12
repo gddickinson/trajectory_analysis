@@ -74,6 +74,8 @@ except ImportError:
             layout = QVBoxLayout(self)
             layout.addWidget(QLabel("Enhanced Analysis Control - Loading..."))
 
+from .srg_options import SrgOptionsWidget
+
 # Core imports with error handling
 try:
     from ..core.analysis_engine import AnalysisParameters, AnalysisStep
@@ -777,11 +779,10 @@ class AnalysisSetupTab(QWidget):
         threshold_group = QGroupBox("Threshold Parameters")
         threshold_layout = QFormLayout(threshold_group)
 
-        self.mobility_threshold_spin = QDoubleSpinBox()
-        self.mobility_threshold_spin.setRange(0.1, 20.0)
-        self.mobility_threshold_spin.setValue(2.11)
-        self.mobility_threshold_spin.setSingleStep(0.1)
-        threshold_layout.addRow("Mobility Threshold:", self.mobility_threshold_spin)
+        # sRg mobility options: preset, definition, threshold, minimum track length (analysis/mobility.py)
+        self.srg_options = SrgOptionsWidget()
+        self.mobility_threshold_spin = self.srg_options.threshold_spin
+        threshold_layout.addRow("Mobility (sRg):", self.srg_options)
 
         self.linear_threshold_spin = QDoubleSpinBox()
         self.linear_threshold_spin.setRange(1.0, 100.0)
@@ -1028,7 +1029,7 @@ class AnalysisSetupTab(QWidget):
                 'calculate_advanced_shape': self.calc_shape_cb.isChecked(),
                 'calculate_diffusion': self.calc_diffusion_cb.isChecked(),
                 'classification_method': self.classification_method_combo.currentText(),
-                'mobility_threshold': self.mobility_threshold_spin.value(),
+                **self.srg_options.values(),
                 'linear_eigenvalue_threshold': self.linear_threshold_spin.value()
             }
 

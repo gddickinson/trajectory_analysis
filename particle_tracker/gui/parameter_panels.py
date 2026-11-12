@@ -21,6 +21,9 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 
+from ..analysis import mobility
+from .srg_options import SrgOptionsWidget
+
 # Import AnalysisParameters with error handling
 try:
     from particle_tracker.core.analysis_engine import AnalysisParameters
@@ -62,7 +65,10 @@ except ImportError:
         linear_alignment_threshold: float = 0.7
 
         # Classification parameters
-        mobility_threshold: float = 2.11
+        mobility_threshold: float = mobility.MOBILITY_DEFAULTS['mobility_threshold']
+        srg_preset: str = mobility.MOBILITY_DEFAULTS['srg_preset']
+        srg_definition: str = mobility.MOBILITY_DEFAULTS['srg_definition']
+        min_classify_length: int = mobility.MOBILITY_DEFAULTS['min_classify_length']
 
         # SVM parameters
         svm_training_data: Optional[str] = None
@@ -509,15 +515,10 @@ class EnhancedFeatureParametersWidget(ParameterWidget):
         self.scaled_rg_cb.toggled.connect(self.valueChanged)
         scaled_rg_layout.addRow("", self.scaled_rg_cb)
 
-        # Mobility threshold
-        self.mobility_threshold_spin = QDoubleSpinBox()
-        self.mobility_threshold_spin.setRange(0.1, 10.0)
-        self.mobility_threshold_spin.setValue(2.11)
-        self.mobility_threshold_spin.setDecimals(3)
-        self.mobility_threshold_spin.valueChanged.connect(self.valueChanged)
-        scaled_rg_layout.addRow("Mobility Threshold:", self.mobility_threshold_spin)
-
-        mobility_help = QLabel("Golan & Sherman threshold: sRg > 2.11 = mobile")
+        # The mobile / immobile options (preset, definition, threshold, minimum length) are in the
+        # Classification panel (SrgOptionsWidget), so there is one place to set them.
+        mobility_help = QLabel("Mobile / immobile options (sRg preset, definition, threshold, minimum track "
+                               "length): Classification panel")
         mobility_help.setStyleSheet("QLabel { color: gray; font-size: 9px; }")
         scaled_rg_layout.addRow("", mobility_help)
 
@@ -663,7 +664,6 @@ class EnhancedFeatureParametersWidget(ParameterWidget):
         self.interpolate_cb.setChecked(False)
 
         # Reset thresholds
-        self.mobility_threshold_spin.setValue(2.11)
         self.eigenvalue_threshold_spin.setValue(20.0)
         self.alignment_threshold_spin.setValue(0.7)
 
@@ -699,9 +699,6 @@ class EnhancedFeatureParametersWidget(ParameterWidget):
             'linear_eigenvalue_threshold': self.eigenvalue_threshold_spin.value(),
             'linear_alignment_threshold': self.alignment_threshold_spin.value(),
 
-            # Mobility parameters
-            'mobility_threshold': self.mobility_threshold_spin.value(),
-
             # Individual feature flags
             'calculate_rg': self.calc_rg_cb.isChecked(),
             'calculate_velocity': self.calc_velocity_cb.isChecked(),
@@ -733,9 +730,7 @@ class EnhancedFeatureParametersWidget(ParameterWidget):
         if 'interpolate_trajectories' in params:
             self.interpolate_cb.setChecked(params['interpolate_trajectories'])
 
-        # Thresholds
-        if 'mobility_threshold' in params:
-            self.mobility_threshold_spin.setValue(params['mobility_threshold'])
+        # Thresholds (mobility options: ClassificationParametersWidget)
         if 'linear_eigenvalue_threshold' in params:
             self.eigenvalue_threshold_spin.setValue(params['linear_eigenvalue_threshold'])
         if 'linear_alignment_threshold' in params:
@@ -782,13 +777,11 @@ class ClassificationParametersWidget(ParameterWidget):
 
         layout.addRow("SVM Training Data:", svm_layout)
 
-        # Mobility threshold
-        self.mobility_threshold_spin = QDoubleSpinBox()
-        self.mobility_threshold_spin.setRange(0.1, 10.0)
-        self.mobility_threshold_spin.setValue(2.11)
-        self.mobility_threshold_spin.setDecimals(3)
-        self.mobility_threshold_spin.valueChanged.connect(self.valueChanged)
-        layout.addRow("Mobility Threshold:", self.mobility_threshold_spin)
+        # sRg mobility options (preset, definition, threshold, minimum track length; analysis/mobility.py)
+        self.srg_options = SrgOptionsWidget()
+        self.srg_options.valueChanged.connect(self.valueChanged)
+        self.mobility_threshold_spin = self.srg_options.threshold_spin
+        layout.addRow("Mobility (sRg):", self.srg_options)
 
         # Update initial state
         self._on_method_changed("threshold")
@@ -813,7 +806,7 @@ class ClassificationParametersWidget(ParameterWidget):
         return {
             'classification_method': self.method_combo.currentText(),
             'svm_training_data': self.svm_file_edit.text(),
-            'mobility_threshold': self.mobility_threshold_spin.value()
+            **self.srg_options.values(),
         }
 
     def set_value(self, params: Dict[str, Any]):
@@ -822,14 +815,13 @@ class ClassificationParametersWidget(ParameterWidget):
             self.method_combo.setCurrentText(params['classification_method'])
         if 'svm_training_data' in params:
             self.svm_file_edit.setText(params['svm_training_data'])
-        if 'mobility_threshold' in params:
-            self.mobility_threshold_spin.setValue(params['mobility_threshold'])
+        self.srg_options.set_values(params)
 
     def reset_to_default(self):
         """Reset to default values."""
         self.method_combo.setCurrentText("threshold")
         self.svm_file_edit.clear()
-        self.mobility_threshold_spin.setValue(2.11)
+        self.srg_options.reset()
 
 
 class ParameterPanelManager(QWidget):

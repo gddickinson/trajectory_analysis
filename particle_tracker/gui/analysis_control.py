@@ -26,6 +26,7 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtGui import QFont, QAction, QIcon, QStandardItemModel, QStandardItem
 
+from particle_tracker.analysis import mobility
 from particle_tracker.core.data_manager import EnhancedDataManager as DataManager, DataType
 
 # Import AnalysisEngine and AnalysisStep with error handling
@@ -798,9 +799,12 @@ class AnalysisControlWidget(QWidget):
 
             # Mobility analysis suggestions
             if AnalysisStep.SCALED_RG in steps:
-                mobility_threshold = current_params.get('mobility_threshold', 2.11)
-                if abs(mobility_threshold - 2.11) > 0.1:
-                    suggestions.append("🎯 Standard mobility threshold is 2.11 (Golan & Sherman)")
+                opts = mobility.resolve({k: current_params[k] for k in mobility.MOBILITY_DEFAULTS
+                                         if k in current_params})
+                if opts['min_classify_length'] < mobility.MOBILITY_DEFAULTS['min_classify_length']:
+                    suggestions.append(
+                        f"🎯 sRg classifies tracks shorter than {mobility.MOBILITY_DEFAULTS['min_classify_length']} "
+                        "points poorly (short diffusing tracks read as immobile; docs/srg_calibration.md)")
 
             # Classification suggestions
             if AnalysisStep.CLASSIFICATION in steps:
@@ -840,7 +844,7 @@ class AnalysisControlWidget(QWidget):
                 'min_track_length': 3,
                 'pixel_size': 108.0,
                 'frame_rate': 10.0,
-                'mobility_threshold': 2.11,
+                **mobility.MOBILITY_DEFAULTS,
                 'calculate_density': True,
                 'density_radii': [3, 5, 10, 20, 30],
                 'calculate_advanced_shape': True,

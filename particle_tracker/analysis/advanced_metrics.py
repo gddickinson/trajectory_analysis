@@ -679,7 +679,7 @@ def calculate_scaled_rg(rg: float, mean_step_size: float, definition: str = mobi
     return mobility.scaled_rg(rg, mean_step_size, definition)
 
 
-def classify_mobility_by_srg(srg: float, threshold: float = 2.11, n_points: int = None,
+def classify_mobility_by_srg(srg: float, threshold: float = mobility.MOBILITY_DEFAULTS["mobility_threshold"], n_points: int = None,
                              min_classify_length: int = 0) -> str:
     """'mobile' / 'immobile' by threshold; 'too_short' below min_classify_length points; 'unclassified' if NaN."""
     n = min_classify_length if n_points is None else n_points

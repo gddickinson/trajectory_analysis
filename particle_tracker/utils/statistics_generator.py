@@ -34,13 +34,16 @@ import seaborn as sns
 from PyQt6.QtCore import QObject, pyqtSignal, QThread
 from PyQt6.QtWidgets import QMessageBox
 
+from ..analysis.mobility import MOBILITY_DEFAULTS, classify_mobility
+
 
 @dataclass
 class StatisticsConfig:
     """Configuration for statistics generation."""
     
     # Analysis parameters
-    mobility_threshold: float = 2.11  # sRg threshold for mobility classification
+    mobility_threshold: float = MOBILITY_DEFAULTS["mobility_threshold"]  # sRg threshold (analysis/mobility.py)
+    min_classify_length: int = MOBILITY_DEFAULTS["min_classify_length"]  # shorter tracks: 'too_short'
     linearity_eigenvalue_threshold: float = 20.0  # Eigenvalue ratio for linearity
     linearity_step_alignment_threshold: float = 0.7  # Step alignment threshold
     density_radii: List[int] = None  # Radii for density analysis
@@ -267,12 +270,14 @@ class StatisticsWorker(QThread):
             mobility_counts = df.groupby('track_number')['mobility_classification'].first().value_counts()
             mobile_tracks = mobility_counts.get('mobile', 0)
             immobile_tracks = mobility_counts.get('immobile', 0)
-        elif 'scaled_radius_gyration' in df.columns or 'sRg' in df.columns:
-            # Calculate mobility from sRg
-            srg_col = 'scaled_radius_gyration' if 'scaled_radius_gyration' in df.columns else 'sRg'
+        elif any(c in df.columns for c in ('scaled_rg', 'scaled_radius_gyration', 'sRg')):
+            # Classify from sRg as FeatureCalculator does (mobile above the threshold; short tracks not counted)
+            srg_col = next(c for c in ('scaled_rg', 'scaled_radius_gyration', 'sRg') if c in df.columns)
             track_srg = df.groupby('track_number')[srg_col].first()
-            mobile_tracks = (track_srg >= self.config.mobility_threshold).sum()
-            immobile_tracks = (track_srg < self.config.mobility_threshold).sum()
+            classes = [classify_mobility(v, track_lengths.loc[t], self.config.mobility_threshold,
+                                         self.config.min_classify_length) for t, v in track_srg.items()]
+            mobile_tracks = classes.count('mobile')
+            immobile_tracks = classes.count('immobile')
         
         mobile_percentage = (mobile_tracks / total_tracks * 100) if total_tracks > 0 else 0
         

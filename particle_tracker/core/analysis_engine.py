@@ -27,6 +27,7 @@ from particle_tracker.analysis.linking import ParticleLinker
 # Import the enhanced features module
 from particle_tracker.analysis.features import FeatureCalculator
 from particle_tracker.analysis.classification import TrajectoryClassifier
+from particle_tracker.analysis.mobility import MOBILITY_DEFAULTS
 
 
 @dataclass
@@ -60,8 +61,11 @@ class AnalysisParameters:
     linear_eigenvalue_threshold: float = 20.0
     linear_alignment_threshold: float = 0.7
 
-    # Classification parameters
-    mobility_threshold: float = 2.11
+    # Classification parameters: sRg mobility options (analysis/mobility.py; docs/srg_calibration.md)
+    srg_preset: str = MOBILITY_DEFAULTS["srg_preset"]
+    srg_definition: str = MOBILITY_DEFAULTS["srg_definition"]
+    mobility_threshold: float = MOBILITY_DEFAULTS["mobility_threshold"]
+    min_classify_length: int = MOBILITY_DEFAULTS["min_classify_length"]
 
     # SVM parameters
     svm_training_data: Optional[str] = None
@@ -427,9 +431,10 @@ class AnalysisEngine(QObject):
         return calculator._calculate_advanced_shape_features(trajectory_data)
 
     def run_scaled_rg_analysis_only(self, trajectory_data: pd.DataFrame,
-                                   mobility_threshold: float = 2.11) -> pd.DataFrame:
+                                   mobility_threshold: float = MOBILITY_DEFAULTS["mobility_threshold"],
+                                   **mobility_options) -> pd.DataFrame:
         """Run only scaled radius of gyration analysis."""
-        params = {'mobility_threshold': mobility_threshold}
+        params = {'mobility_threshold': mobility_threshold, **mobility_options}
         calculator = FeatureCalculator(params)
         return calculator._calculate_scaled_rg_features(trajectory_data)
 

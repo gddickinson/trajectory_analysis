@@ -18,6 +18,8 @@ import copy
 
 from PyQt6.QtCore import QObject, pyqtSignal, QSettings
 
+from ..analysis.mobility import MOBILITY_DEFAULTS
+
 
 @dataclass
 class AnalysisConfig:
@@ -62,8 +64,14 @@ class AnalysisConfig:
     
     # Classification parameters
     classification_method: str = "svm"
-    mobility_threshold: float = 2.11  # Standard threshold
-    srg_cutoff: float = 2.22236433588659  # Golan & Sherman threshold
+    # sRg mobile / immobile options (analysis/mobility.py: presets with sources; docs/srg_calibration.md)
+    srg_preset: str = MOBILITY_DEFAULTS["srg_preset"]
+    srg_definition: str = MOBILITY_DEFAULTS["srg_definition"]
+    mobility_threshold: float = MOBILITY_DEFAULTS["mobility_threshold"]  # Golan & Sherman 2017 (95 % of fixed controls)
+    min_classify_length: int = MOBILITY_DEFAULTS["min_classify_length"]
+    # Pathak-lab PIEZO1 value (lab analysis code; not Golan & Sherman's). Not read by the analysis; use
+    # srg_preset = "piezo1_tirf_10fps" to classify with it.
+    srg_cutoff: float = 2.22236433588659
     
     # SVM parameters
     svm_training_data: Optional[str] = None
