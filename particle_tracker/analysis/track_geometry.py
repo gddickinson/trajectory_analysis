@@ -4,6 +4,7 @@ fractal_dimension: the fractal dimension of the original analysis scripts,
     log(N) / log(N * d_max / L), with N the number of points, L the path length and d_max the largest distance
     between any two points (found on the convex hull). NaN for fewer than 3 points, all points on one line through
     the first point, or a degenerate hull. Reproduces the fracDimension column of the example results file.
+frame_lag_msd: MSD at lags of 1..max_lag frames from pairs of points exactly that many frames apart.
 """
 import math
 
@@ -39,3 +40,24 @@ def fractal_dimension(positions: np.ndarray) -> float:
         return np.nan
     except Exception:
         return np.nan
+
+
+def frame_lag_msd(frames, positions: np.ndarray, max_lag: int):
+    """MSD for lags 1..max_lag in frames, averaging over pairs of points exactly `lag` frames apart.
+
+    Returns (msd_values, lags): lists holding only the lags that have at least one pair. With no missing frames this
+    equals the usual row-based MSD. A repeated frame number keeps its first point.
+    """
+    frames = np.asarray(frames)
+    index = {}
+    for i, f in enumerate(frames):
+        index.setdefault(f, i)
+    msd_values, lags = [], []
+    for lag in range(1, max_lag + 1):
+        pairs = [(i, index[f + lag]) for f, i in index.items() if f + lag in index]
+        if not pairs:
+            continue
+        a, b = np.array(pairs).T
+        msd_values.append(np.mean(np.sum((positions[b] - positions[a]) ** 2, axis=1)))
+        lags.append(lag)
+    return msd_values, lags

@@ -27,7 +27,7 @@ from scipy import stats, spatial
 from sklearn.neighbors import KDTree
 from tqdm import tqdm
 
-from .track_geometry import fractal_dimension
+from .track_geometry import fractal_dimension, frame_lag_msd
 
 
 class AdvancedMetricsCalculator:
@@ -304,21 +304,11 @@ class AdvancedMetricsCalculator:
                     'confinement_strength': np.nan
                 })
             
-            # Calculate MSD for different lag times
+            # Calculate MSD for lags of 1..max_lag frames: pairs of points exactly `lag` frames apart
+            # (frame differences, not row counts, so tracks with missing frames get the right lag times).
+            # Lags with no such pair are skipped.
             max_lag = min(len(positions) - 1, 10)
-            msd_values = []
-            lag_times = []
-            
-            for lag in range(1, max_lag + 1):
-                if lag >= len(positions):
-                    break
-                    
-                displacements = positions[lag:] - positions[:-lag]
-                squared_displacements = np.sum(displacements**2, axis=1)
-                msd = np.mean(squared_displacements)
-                
-                msd_values.append(msd)
-                lag_times.append(lag)
+            msd_values, lag_times = frame_lag_msd(frames, positions, max_lag)
             
             if len(msd_values) < 3:
                 return pd.Series({
