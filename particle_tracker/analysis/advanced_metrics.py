@@ -27,6 +27,8 @@ from scipy import stats, spatial
 from sklearn.neighbors import KDTree
 from tqdm import tqdm
 
+from .track_geometry import fractal_dimension
+
 
 class AdvancedMetricsCalculator:
     """Calculate advanced trajectory metrics using methods from original analysis scripts."""
@@ -545,45 +547,9 @@ class AdvancedMetricsCalculator:
             return 'linear_bidirectional'
     
     def _calculate_fractal_dimension(self, positions: np.ndarray) -> float:
-        """Calculate fractal dimension as in original scripts."""
-        try:
-            # Check if points are collinear
-            if len(positions) < 3:
-                return np.nan
-            
-            x0, y0 = positions[0]
-            points = [(x, y) for x, y in positions if (x != x0) or (y != y0)]
-            
-            if len(points) < 2:
-                return np.nan
-            
-            slopes = [((y - y0) / (x - x0)) if (x != x0) else None for x, y in points]
-            if all(s == slopes[0] for s in slopes):
-                return np.nan  # Collinear points
-            
-            # Calculate total path length
-            total_path_length = np.sum(np.sqrt(np.sum((positions[1:] - positions[:-1])**2, axis=1)))
-            
-            # Find convex hull and largest distance
-            if len(positions) >= 3:
-                hull = spatial.ConvexHull(positions)
-                candidates = positions[hull.vertices]
-                dist_mat = spatial.distance_matrix(candidates, candidates)
-                largest_distance = np.max(dist_mat)
-            else:
-                largest_distance = np.linalg.norm(positions[-1] - positions[0])
-            
-            # Calculate fractal dimension
-            step_count = len(positions)
-            if largest_distance > 0 and total_path_length > 0:
-                fractal_dim = math.log(step_count) / math.log(step_count * largest_distance / total_path_length)
-                return fractal_dim
-            else:
-                return np.nan
-                
-        except Exception:
-            return np.nan
-    
+        """Calculate fractal dimension as in original scripts (see track_geometry.fractal_dimension)."""
+        return fractal_dimension(positions)
+
     def _calculate_straightness(self, positions: np.ndarray) -> float:
         """Calculate straightness (mean cosine of turning angles)."""
         try:

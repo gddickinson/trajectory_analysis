@@ -28,6 +28,8 @@ from sklearn.neighbors import KDTree
 from pathlib import Path
 from tqdm import tqdm
 
+from .track_geometry import fractal_dimension
+
 
 class DensityAnalyzer:
     """Analyze particle density using multiple radius thresholds."""
@@ -190,18 +192,8 @@ class AdvancedShapeAnalyzer:
         except:
             directionality_ratio = np.nan
 
-        # Fractal dimension (simplified)
-        try:
-            step_lengths = np.sqrt(np.sum(steps**2, axis=1))
-            total_length = np.sum(step_lengths)
-            net_disp = np.linalg.norm(positions[-1] - positions[0])
-
-            if total_length > 0 and net_disp > 0:
-                fractal_dim = math.log(len(positions)) / math.log(len(positions) * net_disp / total_length)
-            else:
-                fractal_dim = np.nan
-        except:
-            fractal_dim = np.nan
+        # Fractal dimension (largest point-to-point distance, as in the original scripts)
+        fractal_dim = fractal_dimension(positions)
 
         # Net displacement
         net_displacement = np.linalg.norm(positions[-1] - positions[0])
