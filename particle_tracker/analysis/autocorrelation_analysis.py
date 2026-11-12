@@ -60,17 +60,19 @@ class DirectionAutocorrelationAnalyzer:
         track_data = track_data.sort_values('frame').copy()
         positions = track_data[['x', 'y']].values
 
-        # Calculate step vectors
+        # Calculate step vectors; each step is labelled by the frame it starts from
         steps = np.diff(positions, axis=0)
         step_magnitudes = np.linalg.norm(steps, axis=1)
+        step_frames = track_data['frame'].values[:-1]
 
-        # Remove zero-length steps
+        # Remove zero-length steps (no direction); the remaining steps keep their start frames, so lags stay in frames
         valid_steps = step_magnitudes > 0
         if np.sum(valid_steps) < 2:
             return self._empty_autocorr_result()
 
         steps = steps[valid_steps]
         step_magnitudes = step_magnitudes[valid_steps]
+        step_frames = step_frames[valid_steps]
 
         # Calculate unit vectors (directions)
         unit_vectors = steps / step_magnitudes[:, np.newaxis]
@@ -84,22 +86,24 @@ class DirectionAutocorrelationAnalyzer:
         if max_lag < 1:
             return self._empty_autocorr_result()
 
-        # Calculate autocorrelation for each lag
+        # Autocorrelation at a lag of k frames: mean dot product of the unit vectors of steps whose start frames are
+        # exactly k apart (NaN when no such pair). Without gaps or zero-length steps this is the usual
+        # mean of u[i] . u[i + k].
+        step_index = {}
+        for i, f in enumerate(step_frames):
+            step_index.setdefault(f, i)
         lags = np.arange(1, max_lag + 1)
         autocorr_values = []
 
         for lag in lags:
-            if lag >= len(unit_vectors):
-                autocorr_values.append(np.nan)
-                continue
-
-            # Calculate dot products between vectors separated by lag
             dot_products = []
-            for i in range(len(unit_vectors) - lag):
-                dot_product = np.dot(unit_vectors[i], unit_vectors[i + lag])
+            for f, i in step_index.items():
+                j = step_index.get(f + lag)
+                if j is None:
+                    continue
+                dot_product = np.dot(unit_vectors[i], unit_vectors[j])
                 # Ensure dot product is in valid range [-1, 1]
-                dot_product = np.clip(dot_product, -1.0, 1.0)
-                dot_products.append(dot_product)
+                dot_products.append(np.clip(dot_product, -1.0, 1.0))
 
             if len(dot_products) > 0:
                 autocorr_values.append(np.mean(dot_products))
