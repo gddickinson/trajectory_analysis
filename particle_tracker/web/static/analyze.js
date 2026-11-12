@@ -2,13 +2,15 @@
 // -> per-class summary, warnings and exports.
 import { $, api, app, download, esc, isStatic, list, route } from './core.js';
 import { tracksCsv } from './engine_io.js';
-import { cls, count, f, median, pct, provenance, trackCsv, units, unitsText } from './fmt.js';
+import { MOBILITY_CLASSES, cls, count, f, median, pct, provenance, srgText, trackCsv, units, unitsText } from './fmt.js';
+import { CUSTOM, DEFAULT_DEFINITION, DEFINITIONS, PRESETS, convertThreshold, resolve } from './mobility.js';
 import { getInfo, getResult, setResult, sourceLine, tracksOf } from './state.js';
 
 const num = (id, label, unit, attrs, hint = '') => `<label for="${id}">${label} <span class="unit">${unit}</span></label>
   <input id="${id}" name="${id}" type="number" ${attrs}>${hint ? `<p class="hint">${hint}</p>` : ''}`;
-const KEYS = ['coord_unit', 'pixel_size_um', 'frame_interval_s', 'min_track_length', 'mobility_threshold',
-  'linear_eigenvalue_threshold', 'linear_alignment_threshold', 'autocorr_max_lag', 'ensemble_min_tracks'];
+const KEYS = ['coord_unit', 'pixel_size_um', 'frame_interval_s', 'min_track_length', 'srg_preset', 'srg_definition',
+  'mobility_threshold', 'min_classify_length', 'linear_eigenvalue_threshold', 'linear_alignment_threshold',
+  'autocorr_max_lag', 'ensemble_min_tracks'];
 const ANALYSIS_KEYS = KEYS.slice(3);
 
 route('analyze', async () => {
@@ -38,7 +40,15 @@ route('analyze', async () => {
     </fieldset>
     <fieldset><legend>Parameters</legend>
       ${num('min_track_length', 'Minimum track length', 'points', 'min="2" step="1"', 'Shorter tracks are left out of every analysis (shape metrics need 3).')}
-      ${num('mobility_threshold', 'Mobile above', 'scaled Rg', 'step="any"', `FeatureCalculator default ${d.mobility_threshold}. See Length check.`)}
+    </fieldset>
+    <fieldset><legend>Mobile / immobile (scaled Rg)</legend>
+      <label for="srg_preset">Particle type (preset)</label>
+      <select id="srg_preset" name="srg_preset">${list(Object.entries(PRESETS), ([k, v]) => `<option value="${k}">${esc(v.label)}</option>`)}<option value="${CUSTOM}">Custom</option></select>
+      <p class="hint" id="srg-basis"></p>
+      <label for="srg_definition">sRg definition</label>
+      <select id="srg_definition" name="srg_definition">${list(Object.entries(DEFINITIONS), ([k, v]) => `<option value="${k}">${esc(v.label)}</option>`)}</select>
+      ${num('mobility_threshold', 'Mobile above', 'sRg', 'min="0" step="any"', 'On the chosen definition\'s scale (switching the definition converts it).')}
+      ${num('min_classify_length', 'Classify tracks with at least', 'points', 'min="0" step="1"', 'Shorter tracks are reported as “too short”, not immobile (0 = classify all, legacy). See <a href="#/lengthcheck">Length check</a>.')}
       ${num('linear_eigenvalue_threshold', 'Linear if eigenvalue ratio ≥', 'λ₁/λ₂', 'step="any"')}
       ${num('linear_alignment_threshold', 'and step alignment ≥', '0–1', 'min="0" max="1" step="any"')}
       ${num('autocorr_max_lag', 'Autocorrelation lags up to', 'frames', 'min="1" step="1"')}
@@ -51,8 +61,33 @@ route('analyze', async () => {
 
   const form = $('#pf');
   const set = (id, v) => { $('#' + id).value = v ?? ''; };
+  let def = result.params.srg_definition || DEFAULT_DEFINITION;
+  const basis = () => {
+    const k = $('#srg_preset').value;
+    $('#srg-basis').textContent = PRESETS[k] ? PRESETS[k].basis : 'Custom values. Calibration: docs/srg_calibration.md in the repo.';
+  };
+  const presetValues = k => resolve({ srg_preset: k, srg_definition: $('#srg_definition').value });
+  const srgChange = id => {
+    if (id === 'srg_preset' && $('#srg_preset').value !== CUSTOM) {
+      const r = presetValues($('#srg_preset').value);
+      set('mobility_threshold', r.mobility_threshold); set('min_classify_length', r.min_classify_length);
+    } else if (id === 'srg_definition') {
+      const v = Number($('#mobility_threshold').value), now = $('#srg_definition').value;
+      if (Number.isFinite(v) && $('#mobility_threshold').value !== '') set('mobility_threshold', convertThreshold(v, def, now));
+      def = now;
+    } else if (id === 'mobility_threshold' || id === 'min_classify_length') {
+      const k = $('#srg_preset').value;
+      if (k !== CUSTOM) {
+        const r = presetValues(k);
+        if (Math.abs(Number($('#mobility_threshold').value) - r.mobility_threshold) > 1e-9 || Number($('#min_classify_length').value) !== r.min_classify_length) set('srg_preset', CUSTOM);
+      }
+    }
+    basis();
+  };
   const toggle = () => { $('#upwrap').classList.toggle('hide', form.source.value !== 'upload'); };
   for (const k of KEYS) set(k, result.params[k]);
+  basis();
+  for (const id of ['srg_preset', 'srg_definition', 'mobility_threshold', 'min_classify_length']) $('#' + id).addEventListener('input', () => srgChange(id));
   (form.querySelector(`input[name=source][value="${result.source?.id}"]`) || form.querySelector('input[name=source][value=upload]')).checked = true;
   toggle();
   form.addEventListener('change', e => {
@@ -62,7 +97,7 @@ route('analyze', async () => {
     }
     toggle();
   });
-  $('#reset').onclick = () => { for (const k of ANALYSIS_KEYS) set(k, d[k]); };
+  $('#reset').onclick = () => { for (const k of ANALYSIS_KEYS) set(k, d[k]); def = d.srg_definition; basis(); };
 
   form.addEventListener('submit', async e => {
     e.preventDefault();
@@ -92,7 +127,8 @@ route('analyze', async () => {
 function show(r) {
   const p = r.params, t = r.tracks, n = t.length, u = units(p);
   const mob = count(t, 'mobility_classification'), lin = count(t, 'linear_classification');
-  const classes = ['mobile', 'immobile', 'unclassified'].filter(c => mob.get(c));
+  const classes = MOBILITY_CLASSES.filter(c => mob.get(c));
+  const classified = (mob.get('mobile') || 0) + (mob.get('immobile') || 0);
   const gaps = t.filter(x => x.missing_frames > 0).length;
   const row = c => {
     const s = t.filter(x => x.mobility_classification === c);
@@ -105,7 +141,8 @@ function show(r) {
   ${r.source?.pixel_note ? `<p class="small mute">Units: ${esc(r.source.pixel_note)}.</p>` : ''}
   <div class="tiles">
     <div class="tile"><b>${n}</b><span>tracks (≥ ${p.min_track_length} points)</span></div>
-    <div class="tile"><b>${pct(mob.get('mobile') || 0, n)}</b><span>mobile (scaled Rg &gt; ${f(p.mobility_threshold)})</span></div>
+    <div class="tile"><b>${classified ? pct(mob.get('mobile') || 0, classified) : '–'}</b><span>of ${classified} classified tracks mobile (sRg &gt; ${f(p.mobility_threshold)})</span></div>
+    <div class="tile"><b>${mob.get('too_short') || 0}</b><span>${p.min_classify_length ? `too short to classify (&lt; ${p.min_classify_length} points)` : 'too short: no minimum set (legacy)'}</span></div>
     <div class="tile"><b>${(lin.get('linear_unidirectional') || 0) + (lin.get('linear_bidirectional') || 0)}</b><span>linear tracks</span></div>
     <div class="tile"><b>${f(median(r.density.nn_distance.map(v => u.um(v))), 3)} µm</b><span>median nearest-neighbour distance</span></div>
   </div>
@@ -113,6 +150,7 @@ function show(r) {
   <div class="scroll"><table class="tbl"><thead><tr><th>class</th><th>tracks</th><th>median Rg <span class="unit">µm</span></th><th>median sRg</th>
     <th>median D <span class="unit">µm²/s</span></th><th>median α</th><th>median speed <span class="unit">µm/s</span></th><th>median points</th></tr></thead>
     <tbody>${list(classes, row)}</tbody></table></div>
+  <p class="small mute">Mobility: ${esc(srgText(p))}.</p>
   <p class="small mute">Linearity: ${list([...lin.entries()], ([k, v]) => `${cls(k)} ${v}`, ' · ')}</p>
   <h3>Export</h3>
   <button type="button" id="x-tracks">Per-track CSV</button>

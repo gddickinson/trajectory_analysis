@@ -1,5 +1,6 @@
 // Method (what is computed, from which Python class, with units) and About (desktop app, web app, data, credits).
-import { app, isStatic, route } from './core.js';
+import { app, esc, isStatic, route } from './core.js';
+import { PRESETS } from './mobility.js';
 import { getInfo } from './state.js';
 
 route('method', async () => {
@@ -26,9 +27,21 @@ route('method', async () => {
     <li><b>Linearity</b> (<code>classify_linearity</code>): linear when λ₁/λ₂ ≥ ${d.linear_eigenvalue_threshold} and alignment ≥
       ${d.linear_alignment_threshold}; then unidirectional when directionality ≥ 0.7, else bidirectional.</li>
   </ul>
-  <h2>Mobility (<code>features.ScaledRadiusCalculator</code>)</h2>
-  <p>sRg = √(π/2)·Rg / mean step length; <b>mobile</b> when sRg &gt; ${d.mobility_threshold}, else immobile (code comments cite Golan &amp; Sherman).
-    For diffusing particles sRg grows with the number of points, so the class depends on track length: see <a href="#/lengthcheck">Length check</a>.</p>
+  <h2>Mobility (<code>analysis/mobility.py</code>, used by <code>features.ScaledRadiusCalculator</code>)</h2>
+  <p>Scaled radius of gyration sRg = √(π/2)·Rg / mean step length (Rg with 1/N; steps between consecutive localisations).
+    Golan &amp; Sherman (2017, <a href="https://doi.org/10.1038/ncomms15851">Nat Commun 8:15851</a>) show that for an immobile
+    particle, whose apparent motion is only localisation error, Rg / mean step = √(2/π) whatever the size of the error, so
+    √(π/2)·Rg / mean step ≈ 1; 95 % of their fixed-cell and gold-bead values were below 2.11 and 99 % below 3.89.
+    Ly et al. (2025, <a href="https://doi.org/10.1016/j.bpj.2025.01.010">Biophys J 124:4457</a>, PIEZO1-tdTomato) use the same
+    definition (their Eq. 1) with the 95th percentile of fixed cells as the cutoff. <b>Mobile</b> when sRg &gt; threshold, else
+    immobile; tracks with fewer than the minimum number of points (default ${d.min_classify_length}) are <b>too short</b> and not
+    classified, because a short diffusing track has a small sRg (it grows about as √(N/3)).</p>
+  <div class="scroll"><table class="tbl"><thead><tr><th>preset</th><th>mobile above</th><th>classified from</th><th>where the numbers come from</th></tr></thead>
+    <tbody>${Object.values(PRESETS).map(v => `<tr><td>${esc(v.label)}</td><td>${v.mobility_threshold}</td><td>${v.min_classify_length} points</td><td class="small">${esc(v.basis)}</td></tr>`).join('')}</tbody></table></div>
+  <p class="small">The other definition, Rg / mean step (the <code>radius_gyration_scaled</code> column of the lab's original scripts), is the same
+    quantity divided by √(π/2) = 1.2533; its thresholds must be divided by the same factor (the Analyze form converts them).
+    Comparing Rg / mean step with 2.11 is equivalent to a threshold of 2.64 and calls far more diffusing tracks immobile
+    (simulations: <code>docs/srg_calibration.md</code> in the repo).</p>
   <h2>Steps and speed (<code>FeatureCalculator._calculate_step_metrics</code>)</h2>
   <p>Step length between consecutive localisations; speed = step / frames spanned (so a step across a gap is divided by the gap);
     mean speed per track in µm/s.</p>

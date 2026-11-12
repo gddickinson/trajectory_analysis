@@ -15,8 +15,9 @@ export async function staticApi(path, body) {
   return file(clean);
 }
 
-const KEYS = ['coord_unit', 'pixel_size_um', 'frame_interval_s', 'min_track_length', 'mobility_threshold',
-  'linear_eigenvalue_threshold', 'linear_alignment_threshold', 'autocorr_max_lag', 'ensemble_min_tracks'];
+const KEYS = ['coord_unit', 'pixel_size_um', 'frame_interval_s', 'min_track_length', 'srg_preset', 'srg_definition',
+  'mobility_threshold', 'min_classify_length', 'linear_eigenvalue_threshold', 'linear_alignment_threshold',
+  'autocorr_max_lag', 'ensemble_min_tracks'];
 
 async function analyze(fd) {
   const p = checkParams(Object.fromEntries(KEYS.map(k => [k, fd.get(k)])));

@@ -1,7 +1,8 @@
 // Per-track analyses for the browser engine, ported line by line from the repo's Python (all in pixels and frames):
 //  shapeMetrics      features.AdvancedShapeAnalyzer.calculate_gyration_tensor_metrics (+ track_geometry.fractal_dimension)
 //  linearity         features.AdvancedShapeAnalyzer.classify_linearity (directionality cut 0.7)
-//  scaledRg          features.ScaledRadiusCalculator: sRg = sqrt(pi/2) Rg / mean step; mobile above the threshold
+//  scaledRg          features.ScaledRadiusCalculator via mobility.js: sRg (definition), mobile above the threshold,
+//                    'too_short' below min_classify_length points
 //  meanVelocity      features.FeatureCalculator._calculate_step_metrics (tracks of >= 3 points)
 //  msdFit            advanced_metrics._calculate_advanced_diffusion_metrics: MSD at 1..min(n-1, 10) frame lags
 //                    (pairs exactly that many frames apart), log-log fit of the first 5 -> alpha, D = exp(b) / 4
@@ -9,6 +10,7 @@
 //  persistence       _calculate_persistence_length (1/e crossing; censored at the last lag when there is none)
 //  ensembleAutocorr  calculate_ensemble_autocorrelation (pair-weighted mean and SD; lags with >= N tracks)
 import { eigSym2, linregress, mean, nanMean, skewKurt } from './engine_stats.js';
+import { classify, scaledRgOf } from './mobility.js';
 
 const EMPTY_SHAPE = {
   radius_gyration: NaN, asymmetry: NaN, skewness: NaN, kurtosis: NaN, eigenvalue_ratio: NaN, step_alignment: NaN,
@@ -79,14 +81,13 @@ export function linearity(m, eigThr, alignThr) {
   return m.directionality_ratio >= 0.7 ? 'linear_unidirectional' : 'linear_bidirectional';
 }
 
-export function scaledRg(xs, ys, rg, threshold) {
-  if (xs.length < 2) return { mean_step_size: NaN, scaled_rg: NaN, mobility_classification: 'unclassified' };
+// p: resolved params (srg_definition, mobility_threshold, min_classify_length; mobility.js resolve).
+export function scaledRg(xs, ys, rg, p) {
+  const n = xs.length, cls = srg => classify(srg, n, p.mobility_threshold, p.min_classify_length);
+  if (n < 2) return { mean_step_size: NaN, scaled_rg: NaN, mobility_classification: cls(NaN) };
   const meanStep = mean(steps(xs, ys).len);
-  const srg = Number.isNaN(rg) || Number.isNaN(meanStep) || meanStep <= 0 ? NaN : Math.sqrt(Math.PI / 2) * rg / meanStep;
-  return {
-    mean_step_size: meanStep, scaled_rg: srg,
-    mobility_classification: Number.isNaN(srg) ? 'unclassified' : srg > threshold ? 'mobile' : 'immobile',
-  };
+  const srg = scaledRgOf(rg, meanStep, p.srg_definition);
+  return { mean_step_size: meanStep, scaled_rg: srg, mobility_classification: cls(srg) };
 }
 
 export function meanVelocity(frames, xs, ys) {

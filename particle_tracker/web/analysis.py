@@ -2,8 +2,8 @@
 
 Calls, unchanged:
 - FeatureCalculator.calculate_features (features.py): nearest-neighbour distance and neighbour counts per frame,
-  gyration-tensor shape metrics, linearity class, scaled radius of gyration (sRg) and mobility class, step sizes
-  and velocities;
+  gyration-tensor shape metrics, linearity class, scaled radius of gyration (sRg) and mobility class (definition,
+  threshold and minimum length from analysis/mobility.py; shorter tracks are 'too_short'), step sizes and velocities;
 - AdvancedMetricsCalculator._calculate_advanced_diffusion_metrics (advanced_metrics.py): MSD over lags of
   1..min(n - 1, 10) frames, log-log fit of the first 5 lags -> alpha and D = exp(intercept) / 4;
 - DirectionAutocorrelationAnalyzer (autocorrelation_analysis.py): per-track direction autocorrelation, persistence
@@ -60,7 +60,8 @@ def analyse(df: pd.DataFrame, p: dict, name: str) -> dict:
     px = to_pixels(kept, p)[["track_number", "frame", "x", "y"]]
 
     feats = FeatureCalculator({
-        "mobility_threshold": p["mobility_threshold"], "min_classify_length": 0,   # web options: next commit
+        "srg_preset": p["srg_preset"], "srg_definition": p["srg_definition"],
+        "mobility_threshold": p["mobility_threshold"], "min_classify_length": p["min_classify_length"],
         "linear_eigenvalue_threshold": p["linear_eigenvalue_threshold"],
         "linear_alignment_threshold": p["linear_alignment_threshold"],
         "density_radii": DENSITY_RADII,

@@ -12,6 +12,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from ..analysis import mobility
 from .analysis import analyse
 from .demos import DEMOS, demo_coords, demo_frame, demo_meta, demo_result
 from .tracks_io import (COLUMNS, DEFAULTS, DENSITY_RADII, LABEL_COLUMNS, MSD_MAX_LAG, AnalysisError, coords,
@@ -33,8 +34,16 @@ def index():
 @app.get("/api/info")
 def info():
     """Project summary: analysis defaults, accepted columns, demo datasets."""
-    return {"title": TITLE, "version": "1", "defaults": DEFAULTS, "columns": COLUMNS, "label_columns": LABEL_COLUMNS,
-            "density_radii": DENSITY_RADII, "msd_max_lag": MSD_MAX_LAG, "demos": [demo_meta(d) for d in DEMOS]}
+    return {"title": TITLE, "version": "1", "defaults": parse_params({}), "columns": COLUMNS,
+            "label_columns": LABEL_COLUMNS, "density_radii": DENSITY_RADII, "msd_max_lag": MSD_MAX_LAG,
+            "mobility": mobility_info(), "demos": [demo_meta(d) for d in DEMOS]}
+
+
+def mobility_info() -> dict:
+    """sRg presets and definitions (analysis/mobility.py) for the Analyze form and the Method page."""
+    return {"presets": {k: {**v} for k, v in mobility.PRESETS.items()}, "custom": mobility.CUSTOM,
+            "definitions": {k: {"factor": f, "description": d} for k, (f, d) in mobility.SRG_DEFINITIONS.items()},
+            "default_preset": mobility.DEFAULT_PRESET, "default_definition": mobility.DEFAULT_DEFINITION}
 
 
 @app.get("/api/demo/{demo_id}/result")
@@ -56,12 +65,14 @@ def demo_tracks(demo_id: str):
 @app.post("/api/analyze")
 async def analyze(file: UploadFile | None = File(None), demo: str = Form(""), coord_unit: str = Form(""),
                   pixel_size_um: str = Form(""), frame_interval_s: str = Form(""), min_track_length: str = Form(""),
-                  mobility_threshold: str = Form(""), linear_eigenvalue_threshold: str = Form(""),
+                  mobility_threshold: str = Form(""), srg_preset: str = Form(""), srg_definition: str = Form(""),
+                  min_classify_length: str = Form(""), linear_eigenvalue_threshold: str = Form(""),
                   linear_alignment_threshold: str = Form(""), autocorr_max_lag: str = Form(""),
                   ensemble_min_tracks: str = Form("")):
     """Run the analyses on an uploaded track CSV (or a demo dataset) with the given units and parameters."""
     form = dict(coord_unit=coord_unit, pixel_size_um=pixel_size_um, frame_interval_s=frame_interval_s,
-                min_track_length=min_track_length, mobility_threshold=mobility_threshold,
+                min_track_length=min_track_length, mobility_threshold=mobility_threshold, srg_preset=srg_preset,
+                srg_definition=srg_definition, min_classify_length=min_classify_length,
                 linear_eigenvalue_threshold=linear_eigenvalue_threshold,
                 linear_alignment_threshold=linear_alignment_threshold, autocorr_max_lag=autocorr_max_lag,
                 ensemble_min_tracks=ensemble_min_tracks)

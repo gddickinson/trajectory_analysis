@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 from ..analysis.classification import TrajectoryClassifier
+from ..analysis.mobility import MOBILITY_DEFAULTS, resolve
 
 # Accepted column names, from TrajectoryClassifier.column_mappings (first match wins, case-insensitive).
 _MAP = TrajectoryClassifier().column_mappings
@@ -25,13 +26,17 @@ DEFAULTS = {
     "pixel_size_um": 0.108,        # README example (AnalysisParameters pixel_size=108.0 nm per pixel)
     "frame_interval_s": 0.1,       # README example (frame_rate=10.0 Hz)
     "min_track_length": 3,         # shape metrics need >= 3 points; shorter tracks are dropped first
-    "mobility_threshold": 2.11,    # FeatureCalculator default (ScaledRadiusCalculator.classify_mobility)
+    "srg_preset": MOBILITY_DEFAULTS["srg_preset"],          # analysis/mobility.py presets (or "custom")
+    "srg_definition": MOBILITY_DEFAULTS["srg_definition"],  # golan_sherman | rg_over_step
+    "mobility_threshold": None,    # empty = the preset's threshold on the chosen definition's scale
+    "min_classify_length": None,   # empty = the preset's minimum; shorter tracks are 'too_short'
     "linear_eigenvalue_threshold": 20.0,   # FeatureCalculator default
     "linear_alignment_threshold": 0.7,     # FeatureCalculator default
     "autocorr_max_lag": 20,        # DirectionAutocorrelationAnalyzer default cap (steps)
     "ensemble_min_tracks": 5,      # calculate_ensemble_autocorrelation default: lags reached by >= 5 tracks
 }
-INTEGER_PARAMS = ("min_track_length", "autocorr_max_lag", "ensemble_min_tracks")
+INTEGER_PARAMS = ("min_track_length", "autocorr_max_lag", "ensemble_min_tracks", "min_classify_length")
+TEXT_PARAMS = ("coord_unit", "srg_preset", "srg_definition")
 DENSITY_RADII = [3, 5, 10, 20, 30]   # DensityAnalyzer default radii (pixels)
 MSD_MAX_LAG = 10                      # AdvancedMetricsCalculator: lags 1..min(n - 1, 10) frames, fit first 5
 
@@ -48,10 +53,10 @@ def parse_params(form: dict) -> dict:
         if v in ("", None):
             p[k] = d
             continue
-        if k == "coord_unit":
-            if v not in ("px", "um"):
+        if k in TEXT_PARAMS:
+            if k == "coord_unit" and v not in ("px", "um"):
                 raise AnalysisError("coord_unit must be 'px' or 'um'")
-            p[k] = v
+            p[k] = str(v)
             continue
         try:
             p[k] = float(v)
@@ -63,6 +68,12 @@ def parse_params(form: dict) -> dict:
             if p[k] != int(p[k]):
                 raise AnalysisError(f"{k} must be a whole number")
             p[k] = int(p[k])
+    try:   # preset / definition / threshold / minimum length (explicit values win over the preset)
+        p.update(resolve(p))
+    except ValueError as e:
+        raise AnalysisError(str(e))
+    if p["mobility_threshold"] <= 0:
+        raise AnalysisError("mobility_threshold must be > 0")
     if p["pixel_size_um"] <= 0:
         raise AnalysisError("pixel_size_um must be > 0")
     if p["frame_interval_s"] <= 0:

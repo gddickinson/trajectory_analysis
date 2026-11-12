@@ -59,3 +59,46 @@ JS port, fixture (31,665 checks) and pages updated.
 
 ### Mac mini
 Not used.
+
+## 2026-11-12: sRg definition, presets and minimum track length (George's answer to the open sRg questions)
+
+### Research (DOIs checked on Crossref)
+- Golan & Sherman 2017, Nat Commun 8:15851, doi:10.1038/ncomms15851: Rg² = (1/N)Σ(rᵢ−⟨r⟩)² (Eq. 7); for an immobile
+  particle Rg/⟨|Δr|⟩ = √(2/π), so "the normalized ratio √(π/2)Rg/⟨|Δr|⟩" ≈ 1 independent of the localisation error;
+  "95% of the normalized ratio values fall below the value 2.11 and 99% below 3.89" (fixed cells, gold beads); tracks
+  ≥ 50 frames. So 2.11 belongs to the √(π/2) definition.
+- Ly, Freites, …, Dickinson, Tobias, Pathak 2025, Biophys J 124:4457, doi:10.1016/j.bpj.2025.01.010 (PIEZO1-tdTomato):
+  Eq. 1 sRg = √(π/2)Rg/⟨r⟩; threshold = 95th percentile of fixed-MEF sRg (not printed; Fig. 2A dashed line ≈ 2.2);
+  tracks ≥ 200 positions. 2.22236433588659 is the value in the lab code (particle_trajectory_analyzer config, from
+  J. A. Freites' R code); its derivation is not printed anywhere I found.
+- Bertaccini et al. 2025 Nat Commun 16:5556 (doi:10.1038/s41467-025-59150-1) does not use sRg.
+- The pathak_lab scripts' `radius_gyration_scaled` = Rg/meanLag (no √(π/2)), with gap-spanning steps counted as one step
+  (as here); no threshold is applied to it in those scripts.
+
+### Calibration
+`scripts/srg_calibration.py` -> `docs/srg_calibration.md` (seed 20261112, 4000 tracks per cell): ideal immobile tracks
+have sRg ≈ 1 at every length (95th pct 1.04-1.2, far below 2.11: real fixed controls carry extra apparent motion);
+free diffusion called immobile at 2.11: 54 % (15 points), 12 % (30), 1.4 % (50), 0 % (100) without localisation noise,
+7.8 % at 50 points with noise SD = half the step SD, 38 % with noise = step (≤ 5 % needs 150 points). Rg/⟨step⟩ against
+2.11 (= 2.64 on the √(π/2) scale) makes the false-immobile rate 3-8 times higher at 30-50 points. Confined diffusion reads as
+immobile only when the confinement radius is ≲ 2 steps.
+
+### Changes (separate commits)
+- Fix: `calculate_features(**kwargs)` ignored per-call parameters in the sRg and linearity steps.
+- Fix: tracks without an sRg (1 point, zero step) were 'immobile' (AdvancedMetricsCalculator, TrajectoryClassifier);
+  the threshold classifier compared Rg in pixels with 2.11 when no mean-step column was present.
+- Fix: short tracks are 'too_short' below `min_classify_length` (default 50) instead of being classified. New
+  `analysis/mobility.py` shared by all modules (classification.py's default 2.2224 -> the shared 2.11; 2.2224 is the
+  `piezo1_tirf_10fps` preset). Options: `srg_preset` (membrane_tirf, piezo1_tirf_10fps, fixed_reference_strict,
+  fast_cytosolic, legacy, custom), `srg_definition` (golan_sherman default, rg_over_step), `mobility_threshold`,
+  `min_classify_length`. `legacy` reproduces the old FeatureCalculator results.
+- GUI (`gui/srg_options.py`), config/AnalysisParameters/StatisticsConfig (StatisticsGenerator also used >= and ignored
+  `scaled_rg`), command line `scripts/classify_mobility.py` (incl. `--reference` fixed sample -> 95th percentile).
+- Web: Analyze form (preset, definition, threshold, minimum), 'too short' class on every page, Method page with sources
+  and the presets table, Length check text from the calibration; `static/mobility.js` checked against Python by the
+  node test. Demo results change: example data 31 mobile / 0 immobile / 88 too short (legacy: 56 / 63 / 0).
+
+### Tests
+- `pytest -q tests`: all pass; node engine test ok (78,297 checks; mutations of the minimum-length comparison or the
+  threshold conversion fail it); `screenshots.py --static` and `--base http://127.0.0.1:8212` all routes ok; phone
+  width 390 px overflow 0 on every route; desktop app starts offscreen and passes the new options.

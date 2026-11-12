@@ -17,7 +17,7 @@ route('home', async () => {
   </section>
   <div class="tiles">
     <div class="tile"><b>${first.n_tracks}</b><span>PIEZO1 tracks in the repo's real example recording (${first.n_rows.toLocaleString()} localisations)</span></div>
-    <div class="tile"><b>${pct(mob.get('mobile') || 0, first.n_tracks)}</b><span>of them mobile by scaled Rg (default threshold)</span></div>
+    <div class="tile"><b>${pct(mob.get('mobile') || 0, (mob.get('mobile') || 0) + (mob.get('immobile') || 0))}</b><span>mobile by scaled Rg, of the ${(mob.get('mobile') || 0) + (mob.get('immobile') || 0)} tracks long enough to classify (≥ ${first.params.min_classify_length} points)</span></div>
     <div class="tile"><b>${info.demos.length}</b><span>demo datasets, ${nTracks} tracks, all from the repo</span></div>
     <div class="tile"><b>µm · s</b><span>explicit units: pixel size in µm/pixel, frame interval in s</span></div>
   </div>

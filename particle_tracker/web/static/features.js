@@ -3,7 +3,8 @@
 import { app, esc, route } from './core.js';
 import { histogram, scatter } from './charts.js';
 import { num } from './engine_io.js';
-import { f, legend, median, provenance, units } from './fmt.js';
+import { MOBILITY_CLASSES, f, legend, median, provenance, units } from './fmt.js';
+import { DEFINITIONS } from './mobility.js';
 import { getResult, sourceLine } from './state.js';
 
 route('features', async () => {
@@ -14,13 +15,13 @@ route('features', async () => {
   const panel = (title, body, note = '') => `<div class="panel"><h3>${title}</h3>${body}${note ? `<p class="small mute">${note}</p>` : ''}</div>`;
   app().innerHTML = `<p class="kicker">Per-track features</p><h1>Features</h1>
   <p class="small mute">${provenance(r)} ${esc(sourceLine(r))}</p>
-  ${legend(['mobile', 'immobile', 'unclassified'].filter(c => t.some(q => q.mobility_classification === c)))}
+  ${legend(MOBILITY_CLASSES.filter(c => t.some(q => q.mobility_classification === c)))}
   <div class="charts">
     ${panel('Radius of gyration', histogram(by(q => u.um(q.radius_gyration)), { xlabel: 'Rg (µm)' }),
       'Square root of the trace of the gyration tensor (positions about their mean).')}
-    ${panel('Scaled radius of gyration', histogram(by(q => num(q.scaled_rg)), { xlabel: 'sRg = √(π/2) Rg / mean step', marks: [{ x: p.mobility_threshold, label: 'mobile above' }] }),
-      `Mobile above ${p.mobility_threshold}. sRg grows with track length for diffusing particles: see <a href="#/lengthcheck">Length check</a>.`)}
-    ${panel('sRg against track length', scatter(t.map(q => ({ x: q.n_points, y: num(q.scaled_rg), c: q.mobility_classification })), { xlabel: 'points in track', ylabel: 'scaled Rg', lines: { y: [p.mobility_threshold] } }))}
+    ${panel('Scaled radius of gyration', histogram(by(q => num(q.scaled_rg)), { xlabel: 'sRg = ' + (DEFINITIONS[p.srg_definition]?.label || p.srg_definition), marks: [{ x: p.mobility_threshold, label: 'mobile above' }] }),
+      `Mobile above ${f(p.mobility_threshold)}; tracks with fewer than ${p.min_classify_length} points are not classified (too short). sRg grows with track length for diffusing particles: see <a href="#/lengthcheck">Length check</a>.`)}
+    ${panel('sRg against track length', scatter(t.map(q => ({ x: q.n_points, y: num(q.scaled_rg), c: q.mobility_classification })), { xlabel: 'points in track', ylabel: 'scaled Rg', lines: { y: [p.mobility_threshold], x: p.min_classify_length > 0 ? [p.min_classify_length] : [] } }))}
     ${panel('Asymmetry', histogram(by(q => num(q.asymmetry)), { xlabel: 'asymmetry −ln(1 − (λ₁−λ₂)²/2(λ₁+λ₂)²)' }))}
     ${panel('Skewness and kurtosis', histogram(by(q => num(q.skewness)), { xlabel: 'skewness of steps along the main axis' }) + histogram(by(q => num(q.kurtosis)), { xlabel: 'kurtosis (Fisher) of steps along the main axis' }))}
     ${panel('Fractal dimension', histogram(by(q => num(q.fracDimension)), { xlabel: 'fractal dimension' }),

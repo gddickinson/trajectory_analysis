@@ -3,7 +3,7 @@
 import { app, esc, route } from './core.js';
 import { histogram, lineChart, scatter } from './charts.js';
 import { num } from './engine_io.js';
-import { fu, legend, provenance, units } from './fmt.js';
+import { MOBILITY_CLASSES, fu, legend, provenance, units } from './fmt.js';
 import { getResult, sourceLine } from './state.js';
 
 route('motion', async () => {
@@ -19,7 +19,7 @@ route('motion', async () => {
   }], { xlabel: 'lag (s)', ylabel: '⟨cos θ⟩', yrange: [-1, 1], hlines: [{ y: 0 }] }) : '<p class="mute">No track has enough steps for an autocorrelation.</p>';
   app().innerHTML = `<p class="kicker">Diffusion and persistence</p><h1>Motion</h1>
   <p class="small mute">${provenance(r)} ${esc(sourceLine(r))}</p>
-  ${legend(['mobile', 'immobile', 'unclassified'].filter(c => t.some(q => q.mobility_classification === c)))}
+  ${legend(MOBILITY_CLASSES.filter(c => t.some(q => q.mobility_classification === c)))}
   <div class="charts">
     <div class="panel"><h3>MSD exponent <span class="gk">α</span></h3>${histogram(by(q => num(q.msd_alpha)), { xlabel: 'α (log-log slope, lags 1–5 frames)', marks: [{ x: 1, label: 'free' }] })}
       <p class="small mute">α &lt; 1 sub-, α &gt; 1 superdiffusive. From the MSD at lags of 1 to min(n − 1, 10) frames (pairs exactly that many frames

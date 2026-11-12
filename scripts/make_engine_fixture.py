@@ -20,7 +20,8 @@ sys.path.insert(0, str(ROOT))
 
 from particle_tracker.web.analysis import analyse  # noqa: E402
 from particle_tracker.web.demos import demo_frame  # noqa: E402
-from particle_tracker.web.tracks_io import DEFAULTS, standardise  # noqa: E402
+from particle_tracker.analysis import mobility  # noqa: E402
+from particle_tracker.web.tracks_io import DEFAULTS, parse_params, standardise  # noqa: E402
 
 OUT = ROOT / "tests" / "fixtures" / "engine_fixture.json"
 
@@ -67,15 +68,27 @@ def cases():
     yield "synthetic_um", synth, other
     yield "edges", edges, {**DEFAULTS, "min_track_length": 2, "autocorr_max_lag": 6, "ensemble_min_tracks": 2}
     yield "edges_strict", edges, {**DEFAULTS, "min_track_length": 6, "linear_eigenvalue_threshold": 5.0}
+    # sRg options: legacy preset (every track classified), the other definition with a converted default threshold,
+    # an explicit threshold and minimum, a preset with a long minimum
+    yield "endothelial40_legacy", endo, {**DEFAULTS, "srg_preset": "legacy"}
+    yield "synthetic_rg_over_step", synth, {**other, "mobility_threshold": None, "srg_definition": "rg_over_step",
+                                            "min_classify_length": 20}
+    yield "edges_custom", edges, {**DEFAULTS, "min_track_length": 2, "srg_preset": "custom",
+                                  "mobility_threshold": 1.05, "min_classify_length": 6}
+    yield "endothelial40_piezo1", endo, {**DEFAULTS, "srg_preset": "piezo1_tirf_10fps", "min_classify_length": 25}
 
 
 def build() -> dict:
     out = []
     for name, df, p in cases():
         tab = table(df)
-        res = analyse(standardise(pd.DataFrame(tab["rows"], columns=tab["header"])), p, name + ".csv")
+        res = analyse(standardise(pd.DataFrame(tab["rows"], columns=tab["header"])), parse_params(p), name + ".csv")
         out.append({"name": name, "table": tab, "params": p, "result": res})
-    return {"cases": out}
+    mob = {"presets": {k: {kk: v[kk] for kk in ("label", "mobility_threshold", "min_classify_length", "basis")}
+                       for k, v in mobility.PRESETS.items()},
+           "factors": {k: f for k, (f, _) in mobility.SRG_DEFINITIONS.items()},
+           "default_preset": mobility.DEFAULT_PRESET, "default_definition": mobility.DEFAULT_DEFINITION}
+    return {"cases": out, "mobility": mob}
 
 
 if __name__ == "__main__":

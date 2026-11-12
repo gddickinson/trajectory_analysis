@@ -185,6 +185,23 @@ Classify trajectory behavior:
 - **SVM Method**: Train on labeled data
 - **Threshold Method**: Simple mobility criteria
 
+#### Mobile / immobile by the scaled radius of gyration (sRg)
+sRg = √(π/2)·Rg / mean step (Golan & Sherman 2017, [doi:10.1038/ncomms15851](https://doi.org/10.1038/ncomms15851);
+Ly et al. 2025, [doi:10.1016/j.bpj.2025.01.010](https://doi.org/10.1016/j.bpj.2025.01.010)) is ≈ 1 for an immobile
+particle whatever its localisation error; a track is *mobile* above a threshold. Options (desktop Classification
+panel, web Analyze form, `scripts/classify_mobility.py`, or parameters `srg_preset`, `srg_definition`,
+`mobility_threshold`, `min_classify_length`; all in `particle_tracker/analysis/mobility.py`):
+- **Presets**: membrane protein, TIRF (2.11, ≥ 50 points; default), PIEZO1-tdTomato TIRF 10 fps (2.2224, ≥ 200 points),
+  fixed / immobile reference, strict (3.89), fast diffuser with short tracks (2.11, ≥ 40), legacy (2.11, every track
+  classified, as before 2026-11), custom. Each preset states where its numbers come from.
+- **Minimum track length**: shorter tracks are reported as *too short*, not immobile. A diffusing track's sRg grows about
+  as √(N/3), so short free tracks fall below any fixed threshold (simulations: `docs/srg_calibration.md`, made by
+  `scripts/srg_calibration.py`).
+- **Definition**: `golan_sherman` (above, recommended) or `rg_over_step` = Rg / mean step (the `radius_gyration_scaled`
+  column of the lab's original scripts); thresholds are converted between them.
+- Best practice from both papers: set the threshold from a fixed sample of your own
+  (`python scripts/classify_mobility.py live.csv --reference fixed.csv`, 95th percentile).
+
 ### 3. Visualization and Analysis
 - Use the visualization panel to inspect results
 - Color trajectories by features or classification

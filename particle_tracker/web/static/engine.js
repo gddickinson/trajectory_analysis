@@ -13,7 +13,7 @@ const out = v => (Number.isNaN(v) ? null : v === Infinity ? 'inf' : v === -Infin
 // One track (pixels) -> the per-track record of the result.
 export function trackRecord(t, p) {
   const { frames, xs, ys } = t, n = xs.length;
-  const shape = shapeMetrics(xs, ys), srg = scaledRg(xs, ys, shape.radius_gyration, p.mobility_threshold);
+  const shape = shapeMetrics(xs, ys), srg = scaledRg(xs, ys, shape.radius_gyration, p);
   const msd = msdFit(frames, xs, ys), ac = autocorrelation(frames, xs, ys, p.autocorr_max_lag);
   const span = frames[n - 1] - frames[0] + 1;
   const r = {

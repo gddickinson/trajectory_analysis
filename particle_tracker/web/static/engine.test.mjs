@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { analyse, checkParams, num, parseCsv, standardise } from './engine.js';
 import { eigSym2 } from './engine_stats.js';
+import { DEFAULT_DEFINITION, DEFAULT_PRESET, DEFINITIONS, PRESETS } from './mobility.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = JSON.parse(readFileSync(join(here, '../../../tests/fixtures/engine_fixture.json'), 'utf8'));
@@ -36,8 +37,17 @@ for (const c of fixture.cases) {
   const r = analyse(standardise({ header: c.table.header, rows: c.table.rows.map(row => row.map(String)) }), p, c.name + '.csv');
   const py = { ...c.result };
   delete py.computed_by;
-  delete py.params;
-  compare(r, py, c.name);
+  compare(r, py, c.name);   // includes the resolved params (preset, definition, threshold, minimum)
+}
+
+// sRg presets and definitions: the same tables as analysis/mobility.py.
+{
+  const m = fixture.mobility;
+  compare(PRESETS, m.presets, 'presets');
+  same(Object.keys(PRESETS).join(), Object.keys(m.presets).join(), 'preset keys');
+  for (const [k, f] of Object.entries(m.factors)) close(DEFINITIONS[k]?.factor, f, `factor.${k}`);
+  same(Object.keys(DEFINITIONS).join(), Object.keys(m.factors).join(), 'definition keys');
+  same(DEFAULT_PRESET, m.default_preset, 'default preset'); same(DEFAULT_DEFINITION, m.default_definition, 'default definition');
 }
 
 // CSV path: the same table through parseCsv gives the same result.

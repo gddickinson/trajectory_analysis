@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 
 from .analysis import analyse
-from .tracks_io import DEFAULTS, coords, standardise
+from .tracks_io import DEFAULTS, coords, parse_params, standardise
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 EXAMPLE = ROOT / "particle_tracker" / "resources" / "example_data" / "Endothelial_NonBapta_bin10_crop_RESULTS-FILE.csv"
@@ -82,8 +82,8 @@ def demo_meta(demo_id: str) -> dict:
 
 def demo_params(demo_id: str) -> dict:
     m = demo_meta(demo_id)
-    return {**DEFAULTS, "coord_unit": m["coord_unit"], "pixel_size_um": m["pixel_size_um"],
-            "frame_interval_s": m["frame_interval_s"]}
+    return parse_params({"coord_unit": m["coord_unit"], "pixel_size_um": m["pixel_size_um"],
+                         "frame_interval_s": m["frame_interval_s"]})
 
 
 @lru_cache(maxsize=None)

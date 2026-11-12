@@ -100,7 +100,7 @@ function detail(r, tracks, key, u) {
   }
   const ac = autocorrelation(t.frames, t.xs, t.ys, p.autocorr_max_lag);
   const kv = [['points', `${n} over ${m.duration_frames} frames (${f(u.s(m.duration_frames - 1))} s), ${m.missing_frames} missing`],
-    ['Rg', `${f(u.um(m.radius_gyration))} µm`], ['scaled Rg', `${f(m.scaled_rg, 3)} (mobile above ${p.mobility_threshold})`],
+    ['Rg', `${f(u.um(m.radius_gyration))} µm`], ['scaled Rg', `${f(m.scaled_rg, 3)} (mobile above ${f(p.mobility_threshold)}; classified from ${p.min_classify_length} points)`],
     ['asymmetry', f(m.asymmetry, 3)], ['skewness / kurtosis', `${f(m.skewness, 3)} / ${f(m.kurtosis, 3)}`],
     ['eigenvalue ratio', f(m.eigenvalue_ratio, 3)], ['step alignment', f(m.step_alignment, 3)],
     ['directionality', f(m.directionality_ratio, 3)], ['fractal dimension', f(m.fracDimension, 3)],

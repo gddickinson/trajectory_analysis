@@ -127,3 +127,29 @@ def test_min_track_length_drops_short_tracks():
     r = client.post("/api/analyze", data={"demo": "endothelial", "min_track_length": "20"}).json()
     assert r["n_tracks_dropped"] > 0 and all(t["n_points"] >= 20 for t in r["tracks"])
     assert r["n_tracks"] + r["n_tracks_dropped"] == 119
+
+
+def _classes(r):
+    return [t["mobility_classification"] for t in r["tracks"]]
+
+
+def test_srg_options():
+    """Presets, the second definition, explicit values and the minimum length reach the analysis."""
+    info = client.get("/api/info").json()
+    assert info["defaults"]["min_classify_length"] == 50 and info["defaults"]["mobility_threshold"] == 2.11
+    assert "piezo1_tirf_10fps" in info["mobility"]["presets"]
+    d = client.post("/api/analyze", data={"demo": "endothelial"}).json()
+    assert all(c == "too_short" for t, c in zip(d["tracks"], _classes(d)) if t["n_points"] < 50)
+    assert "too_short" not in _classes(client.post("/api/analyze", data={"demo": "endothelial",
+                                                                         "srg_preset": "legacy"}).json())
+    p = client.post("/api/analyze", data={"demo": "endothelial", "srg_preset": "piezo1_tirf_10fps"}).json()["params"]
+    assert (p["mobility_threshold"], p["min_classify_length"]) == (2.22236433588659, 200)
+    raw = client.post("/api/analyze", data={"demo": "endothelial", "srg_definition": "rg_over_step"}).json()
+    assert _classes(raw) == _classes(d)   # threshold converted with the definition
+    assert abs(raw["params"]["mobility_threshold"] - 2.11 / 1.2533141373155003) < 1e-12
+    c = client.post("/api/analyze", data={"demo": "endothelial", "srg_preset": "custom", "mobility_threshold": "3",
+                                           "min_classify_length": "10"}).json()
+    assert (c["params"]["mobility_threshold"], c["params"]["min_classify_length"]) == (3.0, 10)
+    for bad in ({"srg_preset": "nope"}, {"srg_definition": "nope"}, {"min_classify_length": "-1"},
+                {"mobility_threshold": "0"}):
+        assert client.post("/api/analyze", data={"demo": "endothelial", **bad}).status_code == 400

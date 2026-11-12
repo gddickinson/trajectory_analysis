@@ -1,9 +1,10 @@
 // Formatting, category colours, unit conversion (the analysis works in pixels and frames) and the per-track CSV.
 import { esc } from './core.js';
 import { num } from './engine_io.js';
+import { DEFINITIONS, PRESETS } from './mobility.js';
 
 export const COLORS = {
-  mobile: '#4fd1ff', immobile: '#ff7a59', unclassified: '#7d89a8',
+  mobile: '#4fd1ff', immobile: '#ff7a59', too_short: '#c58cff', unclassified: '#7d89a8',
   non_linear: '#8fa3c8', linear_unidirectional: '#ffd23f', linear_bidirectional: '#45f0a0', linear: '#ffd23f',
 };
 const LABEL_PALETTE = ['#45f0a0', '#ff5c7a', '#ffb02e', '#c58cff', '#59b8ff', '#ffd23f', '#ff4fd8', '#9be564'];
@@ -14,9 +15,17 @@ export function colorOf(c) {
   return labelColors.get(c);
 }
 export const NAMES = {
-  mobile: 'mobile', immobile: 'immobile', unclassified: 'unclassified (too short)', non_linear: 'non-linear',
+  mobile: 'mobile', immobile: 'immobile', too_short: 'too short', unclassified: 'unclassified (no sRg)',
+  non_linear: 'non-linear',
   linear_unidirectional: 'linear, unidirectional', linear_bidirectional: 'linear, bidirectional', linear: 'linear',
 };
+export const MOBILITY_CLASSES = ['mobile', 'immobile', 'too_short', 'unclassified'];
+// One line describing the mobility options of a result.
+export function srgText(p) {
+  const preset = PRESETS[p.srg_preset]?.label || 'custom';
+  return `${preset}; sRg = ${DEFINITIONS[p.srg_definition]?.label || p.srg_definition}; mobile above ${f(p.mobility_threshold)}; ` +
+    `tracks with fewer than ${p.min_classify_length} points not classified`;
+}
 export const nice = s => NAMES[s] || String(s ?? '');
 export const cls = s => `<span class="cls" style="--c:${colorOf(s)}">${esc(nice(s))}</span>`;
 export const legend = keys => `<div class="legend">${keys.map(cls).join('')}</div>`;
@@ -91,7 +100,7 @@ export function trackCsv(r) {
     return q(v === 'inf' ? 'inf' : v);
   };
   const p = r.params;
-  const meta = `# ${r.name}; ${unitsText(p)}; min track length ${p.min_track_length}; sRg mobile above ${p.mobility_threshold}; ` +
+  const meta = `# ${r.name}; ${unitsText(p)}; min track length ${p.min_track_length}; sRg preset ${p.srg_preset}, definition ${p.srg_definition}, mobile above ${p.mobility_threshold}, classified from ${p.min_classify_length} points; ` +
     `linear: eigenvalue ratio >= ${p.linear_eigenvalue_threshold} and step alignment >= ${p.linear_alignment_threshold}; ` +
     `autocorrelation max lag ${p.autocorr_max_lag} frames; ensemble lags need ${p.ensemble_min_tracks} tracks; computed by ${r.computed_by}`;
   return [meta, cols.map(c => c[1]).join(','), ...r.tracks.map(t => cols.map(c => cell(t, c)).join(','))].join('\n') + '\n';

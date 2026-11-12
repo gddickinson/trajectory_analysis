@@ -11,6 +11,8 @@ Many pre-existing modules are over the 500-line budget (see "Files over budget")
 | `run_web.py` | Starts the web app on http://127.0.0.1:8212 (uvicorn, `particle_tracker.web.app:app`). |
 | `scripts/build_static.py` | Exports the static site (front end + every GET in `STATIC_ENDPOINTS` as JSON) to `site/`. |
 | `scripts/screenshots.py` | Playwright smoke test of routes (`--static` / `--base URL`), phone-width check, README shots (`--shots`). |
+| `scripts/srg_calibration.py` | Seeded simulations (immobile, drifting, free, confined tracks) of the sRg classification -> `docs/srg_calibration.md`. |
+| `scripts/classify_mobility.py` | Command line: per-track sRg class of a track CSV (`--preset`, `--definition`, `--threshold`, `--min-length`, `--reference`). |
 | `scripts/make_engine_fixture.py` | Writes `tests/fixtures/engine_fixture.json` (Python results the JS engine must reproduce). |
 | `scripts/init_setup.py`, `scripts/usage_examples.py` | Older setup / example scripts (may be out of date, see ROADMAP). |
 
@@ -23,7 +25,8 @@ Many pre-existing modules are over the 500-line budget (see "Files over budget")
 |---|---|
 | `detection.py` | `ParticleDetector` (+ threshold, LoG, trackpy `DetectionMethod`s; `detector.methods` dict). |
 | `linking.py` | `ParticleLinker`, nearest-neighbour and trackpy linking. |
-| `features.py` | `FeatureCalculator.calculate_features` (main feature step): `DensityAnalyzer` (neighbour counts 3–30 px), nearest-neighbour distance, `AdvancedShapeAnalyzer` (gyration tensor: Rg, asymmetry, skewness, kurtosis, eigenvalue ratio, step alignment, directionality, fractal dimension, straightness, `classify_linearity`), `ScaledRadiusCalculator` (sRg, mobile/immobile), step sizes / velocities, `TrajectoryInterpolator`. |
+| `features.py` | `FeatureCalculator.calculate_features` (main feature step): `DensityAnalyzer` (neighbour counts 3–30 px), nearest-neighbour distance, `AdvancedShapeAnalyzer` (gyration tensor: Rg, asymmetry, skewness, kurtosis, eigenvalue ratio, step alignment, directionality, fractal dimension, straightness, `classify_linearity`), `ScaledRadiusCalculator` (sRg, mobile/immobile/too_short via `mobility.py`), step sizes / velocities, `TrajectoryInterpolator`. |
+| `mobility.py` | sRg mobile / immobile options shared by features, advanced_metrics, classification and the GUI/web: `SRG_DEFINITIONS` (golan_sherman, rg_over_step), `PRESETS` (with sources), `MOBILITY_DEFAULTS`, `resolve`, `scaled_rg`, `classify_mobility` ('too_short' below `min_classify_length`), `track_srg`, `threshold_from_reference`. |
 | `track_geometry.py` | `fractal_dimension` (original scripts' formula), `frame_lag_msd` (MSD from pairs exactly k frames apart). Shared by features / advanced_metrics. |
 | `advanced_metrics.py` | `AdvancedMetricsCalculator` (sRg, shape, density, localisation precision, MSD α/D via `frame_lag_msd`, quality metrics, row-based direction autocorrelation for scripts). Not used by the GUI pipeline; the web app uses its MSD step. |
 | `autocorrelation_analysis.py` | `DirectionAutocorrelationAnalyzer`: per-track curve (lags = step start-frame differences), persistence (1/e), directional bias, exponential fit, ensemble, plots, export. |
@@ -35,7 +38,7 @@ Many pre-existing modules are over the 500-line budget (see "Files over budget")
 `project_manager.py`, `batch_analysis.py` (`BatchAnalysisManager`).
 
 ### `gui/`
-`main_window.py` (3233 lines), `visualization_widget.py`, `parameter_panels.py`, `analysis_control.py`, `batch_control.py`,
+`main_window.py` (3233 lines), `srg_options.py` (`SrgOptionsWidget`: sRg preset / definition / threshold / minimum length), `visualization_widget.py`, `parameter_panels.py`, `analysis_control.py`, `batch_control.py`,
 `data_browser.py`, `logging_widget.py`.
 
 ### `utils/`
@@ -55,6 +58,7 @@ Many pre-existing modules are over the 500-line budget (see "Files over budget")
 | `static/engine.js` | Browser port of `analysis.analyse` (same JSON); re-exports `engine_io.js`. |
 | `static/engine_io.js` | CSV parsing, column detection, standardise, params, coords (mirrors `tracks_io.py`). |
 | `static/engine_stats.js` | `eigSym2` (LAPACK dlanv2, numpy's eigenvector signs), skew/kurtosis, linregress, per-frame neighbours. |
+| `static/mobility.js` | Browser copy of `analysis/mobility.py` (presets, definitions, resolve, classify); checked against Python by the node test. |
 | `static/engine_track.js` | Per-track ports: shape metrics, fractal dimension, sRg, linearity, velocity, MSD fit, autocorrelation, persistence, ensemble. |
 | `static/engine.test.mjs` | Node test: JS vs Python on `tests/fixtures/engine_fixture.json` (rtol 1e-9). |
 | `static/static_api.js` | Static-site `api()`: exported JSON + in-browser analysis for uploads/re-runs. |
@@ -63,7 +67,8 @@ Many pre-existing modules are over the 500-line budget (see "Files over budget")
 
 ## Tests (`tests/`)
 `test_detection.py`, `test_linking.py`, `test_installation.py`; regression tests `test_fix_*.py` (feature row order,
-fractal dimension, MSD frame lags, autocorrelation frame lags, TestDataGenerator); `test_web.py` (API, static build,
+fractal dimension, MSD frame lags, autocorrelation frame lags, TestDataGenerator, calculate_features kwargs, undefined sRg,
+short tracks / sRg options); `test_srg_options.py` (CLI, Qt widget offscreen); `test_web.py` (API, static build,
 fixture current, node engine test). `tests/__init__.py` holds `TestDataGenerator` and generates `tests/test_data/`.
 
 ## Files over budget (pre-existing, not split)
