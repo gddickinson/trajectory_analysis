@@ -19,6 +19,9 @@ import sys
 import os
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
+
 # Add the parent directory to Python path for testing
 TEST_DIR = Path(__file__).parent
 PROJECT_DIR = TEST_DIR.parent
