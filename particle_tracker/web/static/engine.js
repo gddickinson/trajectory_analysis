@@ -30,7 +30,7 @@ export function trackRecord(t, p) {
     directional_bias: out(ac.bias),
   };
   if ('label' in t) r.label = t.label;
-  return { record: r, curve: ac.values };
+  return { record: r, curve: { values: ac.values, pairs: ac.pairs } };
 }
 
 // Per-localisation nearest-neighbour distance and neighbour counts (track / frame order), per-frame summary.
@@ -68,12 +68,12 @@ export function analyse(std, p, name) {
   for (const t of px) {
     const { record, curve } = trackRecord(t, p);
     tracks.push(record);
-    if (curve.length) curves.push(curve);
+    if (curve.values.length) curves.push(curve);
   }
   const nRows = kept.reduce((s, t) => s + t.xs.length, 0);
   return {
     name, computed_by: 'browser', params: p, n_tracks: tracks.length, n_rows: nRows,
     n_tracks_dropped: all.length - kept.length, n_rows_dropped: std.rows.length - nRows, has_labels: !!std.hasLabels,
-    tracks, autocorr_ensemble: ensembleAutocorr(curves), density: density(px),
+    tracks, autocorr_ensemble: ensembleAutocorr(curves, p.ensemble_min_tracks), density: density(px),
   };
 }

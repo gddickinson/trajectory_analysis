@@ -94,6 +94,7 @@ class DirectionAutocorrelationAnalyzer:
             step_index.setdefault(f, i)
         lags = np.arange(1, max_lag + 1)
         autocorr_values = []
+        pair_counts = []
 
         for lag in lags:
             dot_products = []
@@ -105,6 +106,7 @@ class DirectionAutocorrelationAnalyzer:
                 # Ensure dot product is in valid range [-1, 1]
                 dot_products.append(np.clip(dot_product, -1.0, 1.0))
 
+            pair_counts.append(len(dot_products))
             if len(dot_products) > 0:
                 autocorr_values.append(np.mean(dot_products))
             else:
@@ -128,6 +130,7 @@ class DirectionAutocorrelationAnalyzer:
             'max_lag': max_lag,
             'lags': lags,
             'autocorr_values': autocorr_values,
+            'pair_counts': np.array(pair_counts, dtype=int),
             'persistence_length': persistence_length,
             'persistence_censored': self._persistence_censored(autocorr_values),
             'directional_bias': directional_bias,
@@ -145,6 +148,7 @@ class DirectionAutocorrelationAnalyzer:
             'max_lag': 0,
             'lags': np.array([]),
             'autocorr_values': np.array([]),
+            'pair_counts': np.array([], dtype=int),
             'persistence_length': np.nan,
             'persistence_censored': False,
             'directional_bias': np.nan,
@@ -363,13 +367,21 @@ class DirectionAutocorrelationAnalyzer:
         return stats
 
     def calculate_ensemble_autocorrelation(self, trajectory_data: pd.DataFrame,
-                                         max_lag: Optional[int] = None) -> Dict[str, Any]:
+                                         max_lag: Optional[int] = None,
+                                         min_tracks: Optional[int] = None) -> Dict[str, Any]:
         """
         Calculate ensemble-averaged autocorrelation across all tracks.
+
+        At each lag the step pairs of all tracks are pooled: the ensemble value is the mean of the per-track values
+        weighted by their pair counts (equal to the mean over all pairs), and the SD is the pair-weighted SD of the
+        per-track values. Every lag reached by at least `min_tracks` tracks is kept (default: parameter
+        'ensemble_min_tracks', else 5), with the number of tracks and pairs behind it. (Before November 2026 the
+        curve stopped at the lag range of the shortest track.)
 
         Args:
             trajectory_data: DataFrame with trajectory data
             max_lag: Maximum lag time for autocorrelation
+            min_tracks: Minimum number of tracks contributing at a lag
 
         Returns:
             Dictionary with ensemble autocorrelation results
@@ -378,46 +390,42 @@ class DirectionAutocorrelationAnalyzer:
 
         if 'track_number' not in trajectory_data.columns:
             return {}
+        if min_tracks is None:
+            min_tracks = int(self.parameters.get('ensemble_min_tracks', 5))
 
-        # Collect autocorrelation curves from all tracks
-        all_autocorr_curves = []
-        track_ids = trajectory_data['track_number'].unique()
-
-        for track_id in track_ids:
+        # Collect autocorrelation curves and pair counts from all tracks
+        curves = []
+        for track_id in trajectory_data['track_number'].unique():
             track_data = trajectory_data[trajectory_data['track_number'] == track_id]
             result = self.calculate_track_autocorrelation(track_data, max_lag)
-            
             if len(result['autocorr_values']) > 0:
-                all_autocorr_curves.append({
-                    'lags': result['lags'],
-                    'autocorr': result['autocorr_values']
-                })
+                curves.append((np.asarray(result['autocorr_values'], dtype=float), result['pair_counts']))
 
-        if not all_autocorr_curves:
+        if not curves:
             return {}
 
-        # Find common lag range
-        max_common_lag = min([len(curve['lags']) for curve in all_autocorr_curves])
-        if max_common_lag == 0:
+        lags, means, stds, n_tracks, n_pairs = [], [], [], [], []
+        for lag_idx in range(max(len(v) for v, _ in curves)):
+            vals, weights = [], []
+            for v, w in curves:
+                if lag_idx < len(v) and w[lag_idx] > 0:
+                    vals.append(v[lag_idx])
+                    weights.append(w[lag_idx])
+            if len(vals) < max(min_tracks, 1):
+                continue
+            vals, weights = np.array(vals), np.array(weights, dtype=float)
+            m = np.sum(weights * vals) / np.sum(weights)
+            lags.append(lag_idx + 1)
+            means.append(m)
+            stds.append(np.sqrt(np.sum(weights * (vals - m) ** 2) / np.sum(weights)))
+            n_tracks.append(len(vals))
+            n_pairs.append(int(np.sum(weights)))
+
+        if not lags:
             return {}
 
-        # Calculate ensemble average
-        ensemble_lags = np.arange(1, max_common_lag + 1)
-        ensemble_autocorr = np.zeros(max_common_lag)
-        ensemble_std = np.zeros(max_common_lag)
-
-        for lag_idx in range(max_common_lag):
-            lag_values = []
-            for curve in all_autocorr_curves:
-                if lag_idx < len(curve['autocorr']) and not np.isnan(curve['autocorr'][lag_idx]):
-                    lag_values.append(curve['autocorr'][lag_idx])
-            
-            if lag_values:
-                ensemble_autocorr[lag_idx] = np.mean(lag_values)
-                ensemble_std[lag_idx] = np.std(lag_values)
-            else:
-                ensemble_autocorr[lag_idx] = np.nan
-                ensemble_std[lag_idx] = np.nan
+        ensemble_lags = np.array(lags)
+        ensemble_autocorr = np.array(means)
 
         # Calculate ensemble persistence length
         ensemble_persistence = self._calculate_persistence_length(ensemble_lags, ensemble_autocorr)
@@ -426,12 +434,16 @@ class DirectionAutocorrelationAnalyzer:
         ensemble_decay = self._fit_exponential_decay(ensemble_lags, ensemble_autocorr)
 
         return {
-            'n_tracks': len(all_autocorr_curves),
-            'max_lag': max_common_lag,
+            'n_tracks': len(curves),
+            'max_lag': int(ensemble_lags[-1]),
+            'min_tracks': min_tracks,
             'lags': ensemble_lags,
             'ensemble_autocorr': ensemble_autocorr,
-            'ensemble_std': ensemble_std,
+            'ensemble_std': np.array(stds),
+            'n_tracks_per_lag': np.array(n_tracks),
+            'n_pairs_per_lag': np.array(n_pairs),
             'ensemble_persistence_length': ensemble_persistence,
+            'ensemble_persistence_censored': self._persistence_censored(ensemble_autocorr),
             'ensemble_decay_constant': ensemble_decay['decay_constant'],
             'ensemble_r_squared': ensemble_decay['r_squared']
         }

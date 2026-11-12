@@ -7,7 +7,8 @@ Calls, unchanged:
 - AdvancedMetricsCalculator._calculate_advanced_diffusion_metrics (advanced_metrics.py): MSD over lags of
   1..min(n - 1, 10) frames, log-log fit of the first 5 lags -> alpha and D = exp(intercept) / 4;
 - DirectionAutocorrelationAnalyzer (autocorrelation_analysis.py): per-track direction autocorrelation, persistence
-  (1/e crossing) and directional bias, and the ensemble curve over the common lag range.
+  (1/e crossing) and directional bias, and the ensemble curve (pair-weighted mean over every lag reached by at least
+  ensemble_min_tracks tracks).
 The exponential-decay fit of the autocorrelation (scipy curve_fit) is not part of the web output.
 
 Everything is computed in pixels and frames, as the analysis code does; the front end converts to µm and s with the
@@ -91,14 +92,17 @@ def analyse(df: pd.DataFrame, p: dict, name: str) -> dict:
             row["label"] = labels.loc[t]
         tracks.append(row)
 
-    ens = ac.calculate_ensemble_autocorrelation(px, p["autocorr_max_lag"])
+    ens = ac.calculate_ensemble_autocorrelation(px, p["autocorr_max_lag"], p["ensemble_min_tracks"])
     ensemble = None
     if ens:
         ensemble = {"n_tracks": int(ens["n_tracks"]), "lags": [int(v) for v in ens["lags"]],
                     "mean": [clean(v) for v in ens["ensemble_autocorr"]],
                     "std": [clean(v) for v in ens["ensemble_std"]],
+                    "n_tracks_per_lag": [int(v) for v in ens["n_tracks_per_lag"]],
+                    "n_pairs_per_lag": [int(v) for v in ens["n_pairs_per_lag"]],
+                    "min_tracks": int(ens["min_tracks"]),
                     "persistence_length": clean(ens["ensemble_persistence_length"]),
-                    "persistence_censored": ac._persistence_censored(ens["ensemble_autocorr"])}
+                    "persistence_censored": bool(ens["ensemble_persistence_censored"])}
 
     return {
         "name": name, "computed_by": "python", "params": p,

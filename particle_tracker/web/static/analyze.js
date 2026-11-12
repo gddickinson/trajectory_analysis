@@ -8,7 +8,7 @@ import { getInfo, getResult, setResult, sourceLine, tracksOf } from './state.js'
 const num = (id, label, unit, attrs, hint = '') => `<label for="${id}">${label} <span class="unit">${unit}</span></label>
   <input id="${id}" name="${id}" type="number" ${attrs}>${hint ? `<p class="hint">${hint}</p>` : ''}`;
 const KEYS = ['coord_unit', 'pixel_size_um', 'frame_interval_s', 'min_track_length', 'mobility_threshold',
-  'linear_eigenvalue_threshold', 'linear_alignment_threshold', 'autocorr_max_lag'];
+  'linear_eigenvalue_threshold', 'linear_alignment_threshold', 'autocorr_max_lag', 'ensemble_min_tracks'];
 const ANALYSIS_KEYS = KEYS.slice(3);
 
 route('analyze', async () => {
@@ -42,6 +42,7 @@ route('analyze', async () => {
       ${num('linear_eigenvalue_threshold', 'Linear if eigenvalue ratio ≥', 'λ₁/λ₂', 'step="any"')}
       ${num('linear_alignment_threshold', 'and step alignment ≥', '0–1', 'min="0" max="1" step="any"')}
       ${num('autocorr_max_lag', 'Autocorrelation lags up to', 'frames', 'min="1" step="1"')}
+      ${num('ensemble_min_tracks', 'Ensemble lags need at least', 'tracks', 'min="1" step="1"', 'The ensemble autocorrelation keeps every lag reached by this many tracks.')}
     </fieldset>
     <button type="submit" id="run">Run analysis</button><button type="button" class="alt" id="reset">Default parameters</button>
     <p id="msg" class="small" role="status"></p>

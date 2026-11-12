@@ -41,7 +41,8 @@ route('method', async () => {
     for k = 1 to min(${d.autocorr_max_lag}, number of non-zero steps − 1). <b>Persistence</b>: the lag where the curve first drops to
     1/e of its lag-1 value (linear interpolation); when it never does, the persistence is censored and reported as
     “&gt; last lag” (left out of averages). <b>Directional bias</b>: mean of the curve. The <b>ensemble</b>
-    is the mean ± SD over tracks at each lag, over the lags every track reaches. The analyser's exponential-decay fit is not shown.</p>
+    pools the step pairs of all tracks at each lag (per-track values weighted by their pair counts; SD pair-weighted across
+    tracks) and keeps every lag reached by at least ${d.ensemble_min_tracks} tracks, with the number of tracks shown. The analyser's exponential-decay fit is not shown.</p>
   <h2>Density (<code>features.DensityAnalyzer</code>, <code>FeatureCalculator._calculate_nearest_neighbors</code>)</h2>
   <p>Per frame: the distance from each localisation to its nearest neighbour (undefined when alone) and the number of others within
     ${info.density_radii.join(', ')} pixels (distance ≤ r).</p>
@@ -53,6 +54,9 @@ route('method', async () => {
       original scripts; it now reproduces the example file's <code>fracDimension</code> on all 111 tracks whose positions still reproduce the file's Rg.</li>
     <li>MSD and autocorrelation lags counted rows (and, for the autocorrelation, skipped zero-length steps), so gaps shifted lag times;
       lags are now frame differences. Gap-free tracks give the same values as before.</li>
+    <li>The ensemble autocorrelation stopped at the lag range of the shortest track (one 5-point track cut it to 3 lags);
+      persistence without a 1/e drop was reported as 2 × the last lag. Now: pair-weighted ensemble over every lag with enough tracks,
+      and censored persistence (“&gt; last lag”).</li>
   </ul>
   <h2>Browser and Python</h2>
   <p>The local web app runs the Python classes. The static site runs <code>engine.js</code>, a line-by-line port; a node test

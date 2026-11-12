@@ -7,8 +7,8 @@
 //                    (pairs exactly that many frames apart), log-log fit of the first 5 -> alpha, D = exp(b) / 4
 //  autocorrelation   autocorrelation_analysis.calculate_track_autocorrelation (lags = start-frame differences)
 //  persistence       _calculate_persistence_length (1/e crossing; censored at the last lag when there is none)
-//  ensembleAutocorr  calculate_ensemble_autocorrelation (mean and SD over tracks, common lag range)
-import { eigSym2, linregress, mean, nanMean, skewKurt, std } from './engine_stats.js';
+//  ensembleAutocorr  calculate_ensemble_autocorrelation (pair-weighted mean and SD; lags with >= N tracks)
+import { eigSym2, linregress, mean, nanMean, skewKurt } from './engine_stats.js';
 
 const EMPTY_SHAPE = {
   radius_gyration: NaN, asymmetry: NaN, skewness: NaN, kurtosis: NaN, eigenvalue_ratio: NaN, step_alignment: NaN,
@@ -134,7 +134,7 @@ export function persistence(lags, ac) {
 }
 
 export function autocorrelation(frames, xs, ys, maxLagParam) {
-  const empty = { n_steps: 0, lags: [], values: [], persistence: NaN, censored: false, bias: NaN };
+  const empty = { n_steps: 0, lags: [], values: [], pairs: [], persistence: NaN, censored: false, bias: NaN };
   if (xs.length < 3) return empty;
   const s = steps(xs, ys), ux = [], uy = [], sf = [];
   s.len.forEach((L, i) => { if (L > 0) { ux.push(s.dx[i] / L); uy.push(s.dy[i] / L); sf.push(frames[i]); } });
@@ -143,29 +143,40 @@ export function autocorrelation(frames, xs, ys, maxLagParam) {
   if (maxLag < 1) return empty;
   const index = new Map();
   sf.forEach((f, i) => { if (!index.has(f)) index.set(f, i); });
-  const lags = [], values = [];
+  const lags = [], values = [], pairs = [];
   for (let lag = 1; lag <= maxLag; lag++) {
     const dots = [];
     for (const [f, i] of index) {
       const j = index.get(f + lag);
       if (j !== undefined) dots.push(Math.min(1, Math.max(-1, ux[i] * ux[j] + uy[i] * uy[j])));
     }
-    lags.push(lag); values.push(dots.length ? mean(dots) : NaN);
+    lags.push(lag); values.push(dots.length ? mean(dots) : NaN); pairs.push(dots.length);
   }
   const per = persistence(lags, values), ok = values.filter(v => !Number.isNaN(v));
-  return { n_steps: ux.length, lags, values, persistence: per.value, censored: per.censored, bias: ok.length ? mean(ok) : NaN };
+  return { n_steps: ux.length, lags, values, pairs, persistence: per.value, censored: per.censored, bias: ok.length ? mean(ok) : NaN };
 }
 
-// curves: per-track autocorrelation value arrays (tracks with at least one lag), in track order.
-export function ensembleAutocorr(curves) {
+// curves: per-track {values, pairs} (tracks with at least one lag), in track order. Pair-weighted mean and SD at every
+// lag reached by at least minTracks tracks (calculate_ensemble_autocorrelation).
+export function ensembleAutocorr(curves, minTracks = 5) {
   if (!curves.length) return null;
-  const m = Math.min(...curves.map(c => c.length));
-  if (m === 0) return null;
-  const lags = [], meanv = [], sd = [];
-  for (let k = 0; k < m; k++) {
-    const vals = curves.map(c => c[k]).filter(v => !Number.isNaN(v));
-    lags.push(k + 1); meanv.push(vals.length ? mean(vals) : NaN); sd.push(vals.length ? std(vals) : NaN);
+  const lags = [], meanv = [], sd = [], nT = [], nP = [];
+  const longest = Math.max(...curves.map(c => c.values.length));
+  for (let k = 0; k < longest; k++) {
+    const v = [], w = [];
+    for (const c of curves) if (k < c.values.length && c.pairs[k] > 0) { v.push(c.values[k]); w.push(c.pairs[k]); }
+    if (v.length < Math.max(minTracks, 1)) continue;
+    let sw = 0, swv = 0;
+    v.forEach((x, i) => { sw += w[i]; swv += w[i] * x; });
+    const m = swv / sw;
+    let ss = 0;
+    v.forEach((x, i) => { ss += w[i] * (x - m) ** 2; });
+    lags.push(k + 1); meanv.push(m); sd.push(Math.sqrt(ss / sw)); nT.push(v.length); nP.push(sw);
   }
+  if (!lags.length) return null;
   const per = persistence(lags, meanv);
-  return { n_tracks: curves.length, lags, mean: meanv, std: sd, persistence_length: per.value, persistence_censored: per.censored };
+  return {
+    n_tracks: curves.length, lags, mean: meanv, std: sd, n_tracks_per_lag: nT, n_pairs_per_lag: nP, min_tracks: minTracks,
+    persistence_length: per.value, persistence_censored: per.censored,
+  };
 }

@@ -16,7 +16,7 @@ export async function staticApi(path, body) {
 }
 
 const KEYS = ['coord_unit', 'pixel_size_um', 'frame_interval_s', 'min_track_length', 'mobility_threshold',
-  'linear_eigenvalue_threshold', 'linear_alignment_threshold', 'autocorr_max_lag'];
+  'linear_eigenvalue_threshold', 'linear_alignment_threshold', 'autocorr_max_lag', 'ensemble_min_tracks'];
 
 async function analyze(fd) {
   const p = checkParams(Object.fromEntries(KEYS.map(k => [k, fd.get(k)])));

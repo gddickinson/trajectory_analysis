@@ -9,7 +9,6 @@ import { getResult, sourceLine } from './state.js';
 route('motion', async () => {
   const r = await getResult(), p = r.params, t = r.tracks, u = units(p), e = r.autocorr_ensemble;
   const by = fn => t.map(q => ({ v: fn(q), c: q.mobility_classification }));
-  const shortest = Math.min(...t.map(q => q.n_points));
   const posD = t.filter(q => u.D(q.msd_D) > 0);
   const persist = t.filter(q => Number.isFinite(num(q.persistence_length)) && !q.persistence_censored);
   const cens = t.filter(q => q.persistence_censored).length;
@@ -29,10 +28,11 @@ route('motion', async () => {
       <p class="small mute">D = exp(intercept) / 4 of the same fit, i.e. the fitted MSD at one frame over 4τ. ${t.length - posD.length} tracks without a fit are not shown.</p></div>
     <div class="panel"><h3><span class="gk">α</span> against D</h3>${scatter(posD.map(q => ({ x: u.D(q.msd_D), y: num(q.msd_alpha), c: q.mobility_classification })), { xlabel: 'D (µm²/s)', ylabel: 'α', xlog: true, lines: { y: [1] } })}</div>
     <div class="panel"><h3>Ensemble direction autocorrelation</h3>${ens}
-      ${e ? `<p class="small mute">Mean ± SD over tracks of the per-track curves, over the lag range every track reaches
-        (${e.lags.length} lag${e.lags.length === 1 ? '' : 's'} here: set by the track with the fewest steps; shortest track ${shortest} points).
-        Raise the minimum track length on <a href="#/analyze">Analyze</a> for a longer curve. Ensemble persistence:
-        ${e.persistence_censored ? `&gt; ${fu(u.s(e.persistence_length), 's')} (no 1/e drop)` : fu(u.s(e.persistence_length), 's')}.</p>` : ''}</div>
+      ${e ? `<p class="small mute">Mean over all step pairs at each lag (the per-track values weighted by their pair counts) ± the
+        pair-weighted SD across tracks, for every lag reached by at least ${e.min_tracks} tracks (${e.n_tracks} tracks in all; at the
+        longest lag shown, ${e.n_tracks_per_lag[e.n_tracks_per_lag.length - 1]} tracks and ${e.n_pairs_per_lag[e.n_pairs_per_lag.length - 1]} pairs).
+        Ensemble persistence: ${e.persistence_censored ? `&gt; ${fu(u.s(e.persistence_length), 's')} (no 1/e drop)` : fu(u.s(e.persistence_length), 's')}.</p>
+      ${lineChart([{ name: 'tracks contributing', color: '#ffb02e', dots: true, x: e.lags.map(l => l * p.frame_interval_s), y: e.n_tracks_per_lag }], { xlabel: 'lag (s)', ylabel: 'tracks at this lag' })}</p>` : ''}</div>
     <div class="panel"><h3>Persistence time</h3>${histogram(persist.map(q => ({ v: u.s(q.persistence_length), c: q.mobility_classification })), { xlabel: 'lag where the autocorrelation falls to 1/e of lag 1 (s)' })}
       <p class="small mute">${cens} tracks whose autocorrelation never falls to 1/e within their lags are left out: their persistence is
         censored (only known to exceed the last lag, reported as “&gt; last lag”). Undefined when the lag-1 value is ≤ 0.</p></div>

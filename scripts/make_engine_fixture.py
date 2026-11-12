@@ -61,11 +61,11 @@ def cases():
     synth[["x", "y"]] = synth[["x", "y"]] * 0.108
     other = {**DEFAULTS, "coord_unit": "um", "pixel_size_um": 0.108, "frame_interval_s": 0.05, "min_track_length": 5,
              "mobility_threshold": 2.0, "linear_eigenvalue_threshold": 10.0, "linear_alignment_threshold": 0.6,
-             "autocorr_max_lag": 8}
+             "autocorr_max_lag": 8, "ensemble_min_tracks": 3}
     edges = edge_tracks()
     yield "endothelial40", endo, dict(DEFAULTS)
     yield "synthetic_um", synth, other
-    yield "edges", edges, {**DEFAULTS, "min_track_length": 2, "autocorr_max_lag": 6}
+    yield "edges", edges, {**DEFAULTS, "min_track_length": 2, "autocorr_max_lag": 6, "ensemble_min_tracks": 2}
     yield "edges_strict", edges, {**DEFAULTS, "min_track_length": 6, "linear_eigenvalue_threshold": 5.0}
 
 

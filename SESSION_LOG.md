@@ -42,12 +42,16 @@ Gap-free, frame-sorted data give the same results as before for 1, 3 and 4.
   on the Length check page.
 - **Two sRg definitions / thresholds.** features.py: sRg = √(π/2)·Rg/mean step, mobile above 2.11. The example file's
   `radius_gyration_scaled` (original scripts) equals Rg/mean step exactly (no √(π/2)); classification.py uses 2.2224.
-- **Ensemble autocorrelation is truncated to the shortest track's lag range** (one 5-point track limits it to 3 lags).
-  Kept; the web app lets the user raise the minimum track length.
-- **Persistence when the curve never falls to 1/e** is reported as 2 × last lag (an invented value). Kept in Python;
-  the site shows "no 1/e drop" instead.
 - The example file's `nnDist_inFrame` column disagrees with distances recomputed from its own x/y in 42 % of rows and
   contradicts its own neighbour counts in 207 rows; how it was computed is not in the repo.
+
+### Follow-up 2026-11-12 (coordinator: fix the two autocorrelation issues)
+6. Persistence with no 1/e crossing was reported as 2 × last lag (invented). Now the last lag as a lower bound with
+   `persistence_censored` ("> last lag"); censored tracks left out of persistence statistics. (`tests/test_fix_autocorr_censoring.py`)
+7. The ensemble autocorrelation stopped at the shortest track's lag range (example data: 3 lags). Now every lag reached
+   by at least `min_tracks` tracks (default 5, web parameter `ensemble_min_tracks`), pair-weighted mean (= mean over
+   all pairs), pair-weighted SD, tracks and pairs per lag. Example data: 20 lags. (`tests/test_fix_autocorr_ensemble_lags.py`)
+JS port, fixture (31,665 checks) and pages updated.
 
 ### Tests (2026-11-12)
 - `pytest -q tests`: all pass (see report); `pytest -q tests/test_web.py`: all pass; node engine test ok;

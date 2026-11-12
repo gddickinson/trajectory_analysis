@@ -11,7 +11,7 @@ export const COLUMNS = {
 export const LABEL_COLUMNS = ['label', 'reference_label', 'class'];
 export const DEFAULTS = {
   coord_unit: 'px', pixel_size_um: 0.108, frame_interval_s: 0.1, min_track_length: 3, mobility_threshold: 2.11,
-  linear_eigenvalue_threshold: 20.0, linear_alignment_threshold: 0.7, autocorr_max_lag: 20,
+  linear_eigenvalue_threshold: 20.0, linear_alignment_threshold: 0.7, autocorr_max_lag: 20, ensemble_min_tracks: 5,
 };
 export const DENSITY_RADII = [3, 5, 10, 20, 30];
 
@@ -130,7 +130,7 @@ export function checkParams(raw) {
     }
     const x = Number(v);
     if (!Number.isFinite(x)) throw new AnalysisError(`${k} must be a finite number`);
-    if ((k === 'min_track_length' || k === 'autocorr_max_lag') && !Number.isInteger(x)) {
+    if (['min_track_length', 'autocorr_max_lag', 'ensemble_min_tracks'].includes(k) && !Number.isInteger(x)) {
       throw new AnalysisError(`${k} must be a whole number`);
     }
     p[k] = x;
@@ -138,6 +138,7 @@ export function checkParams(raw) {
   if (p.pixel_size_um <= 0) throw new AnalysisError('pixel_size_um must be > 0');
   if (p.frame_interval_s <= 0) throw new AnalysisError('frame_interval_s must be > 0');
   if (p.min_track_length < 2) throw new AnalysisError('min_track_length must be at least 2');
+  if (p.ensemble_min_tracks < 1) throw new AnalysisError('ensemble_min_tracks must be at least 1');
   if (p.autocorr_max_lag < 1 || p.autocorr_max_lag > 1000) throw new AnalysisError('autocorr_max_lag must be between 1 and 1000');
   return p;
 }

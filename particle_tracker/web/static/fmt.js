@@ -93,6 +93,6 @@ export function trackCsv(r) {
   const p = r.params;
   const meta = `# ${r.name}; ${unitsText(p)}; min track length ${p.min_track_length}; sRg mobile above ${p.mobility_threshold}; ` +
     `linear: eigenvalue ratio >= ${p.linear_eigenvalue_threshold} and step alignment >= ${p.linear_alignment_threshold}; ` +
-    `autocorrelation max lag ${p.autocorr_max_lag} frames; computed by ${r.computed_by}`;
+    `autocorrelation max lag ${p.autocorr_max_lag} frames; ensemble lags need ${p.ensemble_min_tracks} tracks; computed by ${r.computed_by}`;
   return [meta, cols.map(c => c[1]).join(','), ...r.tracks.map(t => cols.map(c => cell(t, c)).join(','))].join('\n') + '\n';
 }

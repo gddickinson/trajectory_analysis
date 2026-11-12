@@ -29,8 +29,9 @@ DEFAULTS = {
     "linear_eigenvalue_threshold": 20.0,   # FeatureCalculator default
     "linear_alignment_threshold": 0.7,     # FeatureCalculator default
     "autocorr_max_lag": 20,        # DirectionAutocorrelationAnalyzer default cap (steps)
+    "ensemble_min_tracks": 5,      # calculate_ensemble_autocorrelation default: lags reached by >= 5 tracks
 }
-INTEGER_PARAMS = ("min_track_length", "autocorr_max_lag")
+INTEGER_PARAMS = ("min_track_length", "autocorr_max_lag", "ensemble_min_tracks")
 DENSITY_RADII = [3, 5, 10, 20, 30]   # DensityAnalyzer default radii (pixels)
 MSD_MAX_LAG = 10                      # AdvancedMetricsCalculator: lags 1..min(n - 1, 10) frames, fit first 5
 
@@ -68,6 +69,8 @@ def parse_params(form: dict) -> dict:
         raise AnalysisError("frame_interval_s must be > 0")
     if p["min_track_length"] < 2:
         raise AnalysisError("min_track_length must be at least 2")
+    if p["ensemble_min_tracks"] < 1:
+        raise AnalysisError("ensemble_min_tracks must be at least 1")
     if not 1 <= p["autocorr_max_lag"] <= 1000:
         raise AnalysisError("autocorr_max_lag must be between 1 and 1000")
     return p

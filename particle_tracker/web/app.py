@@ -57,12 +57,14 @@ def demo_tracks(demo_id: str):
 async def analyze(file: UploadFile | None = File(None), demo: str = Form(""), coord_unit: str = Form(""),
                   pixel_size_um: str = Form(""), frame_interval_s: str = Form(""), min_track_length: str = Form(""),
                   mobility_threshold: str = Form(""), linear_eigenvalue_threshold: str = Form(""),
-                  linear_alignment_threshold: str = Form(""), autocorr_max_lag: str = Form("")):
+                  linear_alignment_threshold: str = Form(""), autocorr_max_lag: str = Form(""),
+                  ensemble_min_tracks: str = Form("")):
     """Run the analyses on an uploaded track CSV (or a demo dataset) with the given units and parameters."""
     form = dict(coord_unit=coord_unit, pixel_size_um=pixel_size_um, frame_interval_s=frame_interval_s,
                 min_track_length=min_track_length, mobility_threshold=mobility_threshold,
                 linear_eigenvalue_threshold=linear_eigenvalue_threshold,
-                linear_alignment_threshold=linear_alignment_threshold, autocorr_max_lag=autocorr_max_lag)
+                linear_alignment_threshold=linear_alignment_threshold, autocorr_max_lag=autocorr_max_lag,
+                ensemble_min_tracks=ensemble_min_tracks)
     try:
         p = parse_params(form)
         if file is not None and file.filename:
