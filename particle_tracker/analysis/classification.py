@@ -26,6 +26,8 @@ from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn import metrics
 
+from . import mobility
+
 
 class TrajectoryClassifier:
     """Enhanced trajectory classifier with advanced metrics and multi-round classification."""
@@ -128,8 +130,7 @@ class TrajectoryClassifier:
             if pd.isna(rg) or pd.isna(mean_step) or mean_step == 0:
                 return np.nan
             
-            srg = np.sqrt(np.pi/2) * rg / mean_step
-            return srg
+            return mobility.scaled_rg(rg, mean_step, self._mobility_options()['srg_definition'])
         
         # Apply to each track
         track_srg = df.groupby(track_col).apply(calculate_srg_for_track)
@@ -138,14 +139,19 @@ class TrajectoryClassifier:
         # Map back to original dataframe
         df = df.join(track_srg, on=track_col)
         
-        # Classify mobility based on sRg threshold
-        mobility_threshold = self.parameters.get('srg_mobility_threshold', 2.22236433588659)
-        df['sRg_mobility_classification'] = df['sRg'].apply(
-            lambda x: 'mobile' if x > mobility_threshold else 'immobile' if not pd.isna(x) else 'unclassified'
-        )
+        # Classify mobility (definition, threshold and minimum length: mobility.resolve)
+        opts = self._mobility_options()
+        n_points = df.groupby(track_col)[track_col].transform('size')
+        df['sRg_mobility_classification'] = [
+            mobility.classify_mobility(v, n, opts['mobility_threshold'], opts['min_classify_length'])
+            for v, n in zip(df['sRg'], n_points)]
         
-        self.logger.info(f"sRg calculated with threshold {mobility_threshold}")
+        self.logger.info(f"sRg calculated with threshold {opts['mobility_threshold']}")
         return df
+
+    def _mobility_options(self) -> dict:
+        """sRg options from the parameters; 'srg_mobility_threshold' is the older name of the threshold."""
+        return mobility.resolve(self.parameters, threshold_aliases=('srg_mobility_threshold',))
 
     def _calculate_advanced_linearity_metrics(self, df: pd.DataFrame) -> pd.DataFrame:
         """Calculate advanced linearity metrics including eigenvalue ratios and step alignment."""
@@ -535,18 +541,20 @@ class TrajectoryClassifier:
         
         # Use sRg threshold if available (tracks without an sRg are 'unclassified', code 0)
         if 'sRg' in df.columns:
-            srg_threshold = self.parameters.get('srg_mobility_threshold', 2.22236433588659)
-            
+            opts = self._mobility_options()
             track_col = self._find_column(df, 'track_number')
             srg = df.groupby(track_col)['sRg'].first() if track_col else df['sRg']
-            mobility = pd.Series(np.where(srg.isna(), 0, np.where(srg > srg_threshold, 2, 1)),
-                                 index=srg.index)  # 0=unclassified, 1=immobile, 2=mobile
-            labels = mobility.map({0: 'unclassified', 1: 'immobile', 2: 'mobile'})
+            n_points = df.groupby(track_col).size() if track_col else pd.Series(1, index=srg.index)
+            labels = pd.Series([mobility.classify_mobility(v, n, opts['mobility_threshold'],
+                                                           opts['min_classify_length'])
+                                for v, n in zip(srg, n_points.reindex(srg.index))], index=srg.index)
+            # 0 = unclassified, 1 = immobile, 2 = mobile, 3 = too short
+            codes = labels.map({'unclassified': 0, 'immobile': 1, 'mobile': 2, 'too_short': 3})
             if track_col:
-                df = df.join(mobility.rename('threshold_classification'), on=track_col)
+                df = df.join(codes.rename('threshold_classification'), on=track_col)
                 df = df.join(labels.rename('threshold_label'), on=track_col)
             else:
-                df['threshold_classification'] = mobility
+                df['threshold_classification'] = codes
                 df['threshold_label'] = labels
         else:
             # The raw radius of gyration (pixels) is not comparable with the dimensionless sRg threshold

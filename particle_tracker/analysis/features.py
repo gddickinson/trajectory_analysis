@@ -28,6 +28,7 @@ from sklearn.neighbors import KDTree
 from pathlib import Path
 from tqdm import tqdm
 
+from . import mobility
 from .track_geometry import fractal_dimension
 
 
@@ -278,44 +279,22 @@ class AdvancedShapeAnalyzer:
 
 
 class ScaledRadiusCalculator:
-    """Calculate scaled radius of gyration (sRg) following Golan & Sherman."""
+    """Scaled radius of gyration (sRg) and mobile / immobile class; definitions and presets in mobility.py."""
 
     def __init__(self):
         self.logger = logging.getLogger(__name__)
 
-    def calculate_scaled_rg(self, radius_gyration: float, mean_step_size: float) -> float:
-        """
-        Calculate scaled radius of gyration.
+    def calculate_scaled_rg(self, radius_gyration: float, mean_step_size: float,
+                            definition: str = mobility.DEFAULT_DEFINITION) -> float:
+        """sRg (default sqrt(pi/2) * Rg / mean step, Golan & Sherman 2017); NaN if undefined."""
+        return mobility.scaled_rg(radius_gyration, mean_step_size, definition)
 
-        Args:
-            radius_gyration: Standard radius of gyration
-            mean_step_size: Mean step size of trajectory
-
-        Returns:
-            Scaled radius of gyration value
-        """
-        if np.isnan(radius_gyration) or np.isnan(mean_step_size) or mean_step_size <= 0:
-            return np.nan
-
-        # Golan & Sherman formula: √(π/2) * Rg / mean_step_size
-        scaled_rg = np.sqrt(np.pi/2) * radius_gyration / mean_step_size
-        return scaled_rg
-
-    def classify_mobility(self, scaled_rg: float, threshold: float = 2.11) -> str:
-        """
-        Classify trajectory mobility based on scaled Rg.
-
-        Args:
-            scaled_rg: Scaled radius of gyration
-            threshold: Mobility threshold (default from Golan & Sherman)
-
-        Returns:
-            Mobility classification ('mobile' or 'immobile')
-        """
-        if np.isnan(scaled_rg):
-            return 'unclassified'
-
-        return 'mobile' if scaled_rg > threshold else 'immobile'
+    def classify_mobility(self, scaled_rg: float, threshold: float = 2.11, n_points: int = None,
+                          min_classify_length: int = 0) -> str:
+        """'mobile' above the threshold, else 'immobile'; 'too_short' below min_classify_length points
+        (when n_points is given); 'unclassified' if sRg is NaN."""
+        n = min_classify_length if n_points is None else n_points
+        return mobility.classify_mobility(scaled_rg, n, threshold, min_classify_length)
 
 
 class TrajectoryInterpolator:
@@ -524,7 +503,8 @@ class FeatureCalculator:
         return df
 
     def _calculate_scaled_rg_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Calculate scaled radius of gyration features."""
+        """Scaled radius of gyration and mobility class per track (options: mobility.resolve)."""
+        opts = mobility.resolve(self.parameters)
         # Calculate mean step sizes per track
         mean_steps = []
         scaled_rgs = []
@@ -536,7 +516,8 @@ class FeatureCalculator:
             if len(track_data) < 2:
                 mean_steps.append(np.nan)
                 scaled_rgs.append(np.nan)
-                mobility_classes.append('unclassified')
+                mobility_classes.append(mobility.classify_mobility(
+                    np.nan, len(track_data), opts['mobility_threshold'], opts['min_classify_length']))
                 continue
 
             # Calculate mean step size
@@ -548,13 +529,10 @@ class FeatureCalculator:
             # Get radius of gyration (should be calculated by now)
             rg = track_data['radius_gyration'].iloc[0]
 
-            # Calculate scaled Rg
-            scaled_rg = self.scaled_rg_calculator.calculate_scaled_rg(rg, mean_step)
-
-            # Classify mobility
-            mobility_threshold = self.parameters.get('mobility_threshold', 2.11)
+            # Calculate scaled Rg and classify (too_short below the minimum number of points)
+            scaled_rg = self.scaled_rg_calculator.calculate_scaled_rg(rg, mean_step, opts['srg_definition'])
             mobility_class = self.scaled_rg_calculator.classify_mobility(
-                scaled_rg, mobility_threshold
+                scaled_rg, opts['mobility_threshold'], len(track_data), opts['min_classify_length']
             )
 
             mean_steps.append(mean_step)

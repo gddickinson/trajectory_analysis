@@ -27,6 +27,7 @@ from scipy import stats, spatial
 from sklearn.neighbors import KDTree
 from tqdm import tqdm
 
+from . import mobility
 from .track_geometry import fractal_dimension, frame_lag_msd
 
 
@@ -74,6 +75,8 @@ class AdvancedMetricsCalculator:
         This is the gold standard for mobility classification:
         sRg = √(π/2) * Rg / mean_step_size
         """
+        opts = mobility.resolve(self.parameters, threshold_aliases=('sRg_threshold',))
+
         def calculate_srg_for_track(track_data):
             track_data = track_data.sort_values('frame')
             positions = track_data[['x', 'y']].values
@@ -82,7 +85,8 @@ class AdvancedMetricsCalculator:
                 return pd.Series({
                     'sRg': np.nan,
                     'mean_step_size': np.nan,
-                    'mobility_sRg': 'unclassified'
+                    'mobility_sRg': mobility.classify_mobility(np.nan, len(positions), opts['mobility_threshold'],
+                                                               opts['min_classify_length'])
                 })
             
             # Calculate basic radius of gyration
@@ -95,18 +99,10 @@ class AdvancedMetricsCalculator:
             step_sizes = np.sqrt(np.sum(steps**2, axis=1))
             mean_step_size = np.mean(step_sizes)
             
-            # Calculate scaled Rg
-            if mean_step_size > 0:
-                sRg = np.sqrt(np.pi/2) * rg / mean_step_size
-            else:
-                sRg = np.nan
-            
-            # Classify mobility using Golan & Sherman threshold
-            mobility_threshold = self.parameters.get('sRg_threshold', 2.11)
-            if np.isnan(sRg):
-                mobility_sRg = 'unclassified'
-            else:
-                mobility_sRg = 'mobile' if sRg > mobility_threshold else 'immobile'
+            # Scaled Rg and mobility class (options and minimum length: mobility.resolve)
+            sRg = mobility.scaled_rg(rg, mean_step_size, opts['srg_definition'])
+            mobility_sRg = mobility.classify_mobility(sRg, len(positions), opts['mobility_threshold'],
+                                                      opts['min_classify_length'])
             
             return pd.Series({
                 'sRg': sRg,
@@ -448,7 +444,7 @@ class AdvancedMetricsCalculator:
             trapped_tracks = df[df[classification_column] == 'immobile']['track_number'].unique()
         else:
             # Fallback: use sRg threshold
-            srg_threshold = self.parameters.get('sRg_threshold', 2.11)
+            srg_threshold = mobility.resolve(self.parameters, threshold_aliases=('sRg_threshold',))['mobility_threshold']
             if 'sRg' in df.columns:
                 trapped_tracks = df[df['sRg'] < srg_threshold]['track_number'].unique()
             else:
@@ -678,18 +674,16 @@ class AdvancedMetricsCalculator:
 
 
 # Convenience functions for specific metric calculations
-def calculate_scaled_rg(rg: float, mean_step_size: float) -> float:
-    """Calculate scaled radius of gyration using Golan & Sherman method."""
-    if np.isnan(rg) or np.isnan(mean_step_size) or mean_step_size == 0:
-        return np.nan
-    return np.sqrt(np.pi/2) * rg / mean_step_size
+def calculate_scaled_rg(rg: float, mean_step_size: float, definition: str = mobility.DEFAULT_DEFINITION) -> float:
+    """Scaled radius of gyration (default sqrt(pi/2) * Rg / mean step, Golan & Sherman 2017)."""
+    return mobility.scaled_rg(rg, mean_step_size, definition)
 
 
-def classify_mobility_by_srg(srg: float, threshold: float = 2.11) -> str:
-    """Classify mobility using scaled radius of gyration threshold."""
-    if np.isnan(srg):
-        return 'unclassified'
-    return 'mobile' if srg > threshold else 'immobile'
+def classify_mobility_by_srg(srg: float, threshold: float = 2.11, n_points: int = None,
+                             min_classify_length: int = 0) -> str:
+    """'mobile' / 'immobile' by threshold; 'too_short' below min_classify_length points; 'unclassified' if NaN."""
+    n = min_classify_length if n_points is None else n_points
+    return mobility.classify_mobility(srg, n, threshold, min_classify_length)
 
 
 def calculate_multi_radius_neighbors(positions: np.ndarray, radii: List[int] = [3, 5, 10, 20, 30]) -> Dict[int, int]:

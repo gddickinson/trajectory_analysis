@@ -60,7 +60,7 @@ def analyse(df: pd.DataFrame, p: dict, name: str) -> dict:
     px = to_pixels(kept, p)[["track_number", "frame", "x", "y"]]
 
     feats = FeatureCalculator({
-        "mobility_threshold": p["mobility_threshold"],
+        "mobility_threshold": p["mobility_threshold"], "min_classify_length": 0,   # web options: next commit
         "linear_eigenvalue_threshold": p["linear_eigenvalue_threshold"],
         "linear_alignment_threshold": p["linear_alignment_threshold"],
         "density_radii": DENSITY_RADII,
