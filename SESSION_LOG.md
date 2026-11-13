@@ -102,3 +102,13 @@ immobile only when the confinement radius is ≲ 2 steps.
 - `pytest -q tests`: all pass; node engine test ok (78,297 checks; mutations of the minimum-length comparison or the
   threshold conversion fail it); `screenshots.py --static` and `--base http://127.0.0.1:8212` all routes ok; phone
   width 390 px overflow 0 on every route; desktop app starts offscreen and passes the new options.
+
+## 2026-11-13: PIEZO1 sRg threshold sourced from Ly et al. 2025 (branch `web-interface`, not pushed)
+- Read the published article (Biophys J 124:4457-4470, doi:10.1016/j.bpj.2025.01.010; supporting material not in the PDF).
+  Eq. 1 (p. 4461) = the preset's `golan_sherman` definition. Threshold = "the 95th percentile of a selected set of
+  fixed-cell trajectories sRg distribution" (p. 4461; Fig. 2A legend), the set selected by TAMSD mixture models
+  (Methods, "Fixed-cell trajectory analysis", p. 4459). No number is printed; Fig. 2A's dashed line measures
+  2.23 +/- 0.03, consistent with 2.2224, so the preset value is unchanged. Not reproduced: NaN placeholders for skipped
+  frames, removal of live tracks with TAMSD below the localisation error, the fixed-set selection.
+- Updated: mobility.py docstring and preset basis (+ mobility.js, fixture), docs/srg_calibration.md section 5 (from
+  scripts/srg_calibration.py), web Method page, config_manager comment, README pointer.

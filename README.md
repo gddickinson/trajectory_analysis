@@ -193,7 +193,8 @@ panel, web Analyze form, `scripts/classify_mobility.py`, or parameters `srg_pres
 `mobility_threshold`, `min_classify_length`; all in `particle_tracker/analysis/mobility.py`):
 - **Presets**: membrane protein, TIRF (2.11, ≥ 50 points; default), PIEZO1-tdTomato TIRF 10 fps (2.2224, ≥ 200 points),
   fixed / immobile reference, strict (3.89), fast diffuser with short tracks (2.11, ≥ 40), legacy (2.11, every track
-  classified, as before 2026-11), custom. Each preset states where its numbers come from.
+  classified, as before 2026-11), custom. Each preset states where its numbers come from (the PIEZO1 threshold and
+  how Ly et al. 2025 derived it: `docs/srg_calibration.md`, section 5).
 - **Minimum track length**: shorter tracks are reported as *too short*, not immobile. A diffusing track's sRg grows about
   as √(N/3), so short free tracks fall below any fixed threshold (simulations: `docs/srg_calibration.md`, made by
   `scripts/srg_calibration.py`).

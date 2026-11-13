@@ -27,6 +27,49 @@ LENGTHS = [5, 8, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100, 150, 200, 300]
 NOISE_RATIOS = [0.0, 0.25, 0.5, 1.0, 2.0]
 T_GS, T_PIEZO, T_STRICT = 2.11, 2.22236433588659, 3.89
 
+PIEZO1_SOURCE = """
+## 5. Source of the PIEZO1 threshold (`piezo1_tirf_10fps`, 2.2224)
+
+Ly AT, Freites JA, Bertaccini GA, Evans EL, Dickinson GD, Tobias DJ, Pathak MM (2025). Single-particle tracking reveals
+heterogeneous PIEZO1 diffusion. *Biophys J* 124:4457-4470. [doi:10.1016/j.bpj.2025.01.010](https://doi.org/10.1016/j.bpj.2025.01.010).
+Page numbers are the journal's; the supporting material is not part of the article PDF and was not checked.
+
+- **Definition** (Results, "PIEZO1-tdTomato puncta exhibit heterogeneous mobility", p. 4461, Eq. 1):
+  sRg = √(π/2)·Rg/⟨r⟩ with Rg = √((1/N)Σ|x⃗ᵢ − ⟨x⃗⟩|²) and ⟨r⟩ = (1/(N−1))Σ|x⃗ᵢ₊₁ − x⃗ᵢ|, "as proposed by Golan and
+  Sherman". (As printed, the centroid ⟨x⃗⟩ = Σx⃗ᵢ lacks its 1/N.) This is `golan_sherman` / `mobility.track_srg` for a
+  track without gaps. "For immobile trajectories with apparent motion resulting exclusively from localization error, the
+  sRg distribution should approximate a Gaussian distribution with mean of 1 independent of the magnitude of the
+  localization error."
+- **Threshold** (Results, p. 4461): "Similar to Golan and Sherman (46), we used the 95th percentile of a selected set of
+  fixed-cell trajectories sRg distribution as a threshold to categorize trajectories as immobile or mobile in live
+  cells." Fig. 2A legend: "we take the 95th percentile of the MEFs fixed cells' sRg distribution (vertical dashed
+  line) as cutoff"; with it "~40% of the observed trajectories are identified as immobile in both cell types"
+  (MEFs and mLSECs; the text says 40 %).
+- **How the fixed-cell set was selected** (Materials and methods, "Fixed-cell trajectory analysis", p. 4459): PIEZO1-tdTomato
+  MEFs fixed with 4 % paraformaldehyde. Each trajectory's TAMSD was fitted as a power law K_α(nΔt)^α over lags 2-4
+  (expected α ≈ 0). A two-component Gaussian mixture on α kept the component with the lower mean α, then a
+  two-component kernel mixture on K_α kept the component with the lower mean K_α (R package mixtools). "We also
+  computed the corresponding scaled radius of gyration, sRg (see Eq. 1), for this selected data set of fixed-cell
+  trajectories and used the 95th percentile of the corresponding distribution as a threshold to identify trajectories
+  as immobile or mobile in live cells."
+- **The number**: not printed in the text, figure legends or methods. Measured against the axis ticks of Fig. 2A
+  (rendered at 600 dpi), the dashed line sits at sRg = 2.23 ± 0.03, consistent with 2.22236433588659, the value in the
+  Pathak-lab analysis code (particle_trajectory_analyzer config, adapted from J. A. Freites' R code). The paper gives no
+  other derivation of the value, so 2.2224 is kept; its definition matches the preset's.
+- **Track length** ("PIEZO1-tdTomato trajectory generation", p. 4459): "We limited our analysis to trajectories that were
+  at least 20 s in length, which at a frame rate of 100 ms resulted in a minimum of 200 positions per trajectory" (the
+  preset's minimum of 200 points).
+- **Not reproduced by the preset** (differences, all from the same pages):
+  - Skipped frames "were handled by inserting a placeholder value (numpy.nan) for missing coordinates" (p. 4459). The
+    paper does not say how steps next to a placeholder enter ⟨r⟩. Here, a step across missing frames counts as one
+    step, so ⟨r⟩ (and so sRg) can differ for tracks with gaps. Whether the 200-position minimum counts placeholders is
+    also not stated; here it counts localisations.
+  - Live-cell trajectories with TAMSD below the fixed-cell localisation-error estimate were removed before the analyses
+    ("Live-cell trajectory analysis", pp. 4459-4460).
+  - The threshold came from a TAMSD-selected fixed-cell set; `threshold_from_reference` / `--reference` take the 95th
+    percentile of whatever reference sRg values they are given, without that selection.
+"""
+
 
 def srg_batch(xy):
     """golan_sherman sRg of every track in an (M, N, 2) array (same maths as mobility.track_srg)."""
@@ -139,7 +182,7 @@ def run(trials):
     for k, v in PRESETS.items():
         L.append(f"| `{k}` ({v['label']}) | {v['mobility_threshold']:.4g} | {v['min_classify_length']} | "
                  f"{v['basis']} |")
-    L.append("")
+    L.append(PIEZO1_SOURCE)
     return "\n".join(L), min_len
 
 

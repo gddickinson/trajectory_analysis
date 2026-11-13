@@ -69,7 +69,9 @@ class AnalysisConfig:
     srg_definition: str = MOBILITY_DEFAULTS["srg_definition"]
     mobility_threshold: float = MOBILITY_DEFAULTS["mobility_threshold"]  # Golan & Sherman 2017 (95 % of fixed controls)
     min_classify_length: int = MOBILITY_DEFAULTS["min_classify_length"]
-    # Pathak-lab PIEZO1 value (lab analysis code; not Golan & Sherman's). Not read by the analysis; use
+    # Pathak-lab PIEZO1 value (lab analysis code; not Golan & Sherman's). Ly et al. 2025 (Biophys J 124:4457,
+    # p. 4459, Fig. 2A) define it as the 95th percentile of selected fixed-MEF sRg but do not print it; their
+    # Fig. 2A line measures 2.23 +/- 0.03. See analysis/mobility.py. Not read by the analysis; use
     # srg_preset = "piezo1_tirf_10fps" to classify with it.
     srg_cutoff: float = 2.22236433588659
     

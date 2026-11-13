@@ -33,7 +33,12 @@ route('method', async () => {
     particle, whose apparent motion is only localisation error, Rg / mean step = √(2/π) whatever the size of the error, so
     √(π/2)·Rg / mean step ≈ 1; 95 % of their fixed-cell and gold-bead values were below 2.11 and 99 % below 3.89.
     Ly et al. (2025, <a href="https://doi.org/10.1016/j.bpj.2025.01.010">Biophys J 124:4457</a>, PIEZO1-tdTomato) use the same
-    definition (their Eq. 1) with the 95th percentile of fixed cells as the cutoff. <b>Mobile</b> when sRg &gt; threshold, else
+    definition (their Eq. 1, p. 4461) and take as the cutoff “the 95th percentile of a selected set of fixed-cell trajectories
+    sRg distribution”: paraformaldehyde-fixed MEF trajectories kept by two mixture-model selections on their TAMSD power-law
+    fit (lower exponent α, then lower coefficient K<sub>α</sub>; Methods, “Fixed-cell trajectory analysis”, p. 4459). The paper
+    does not print the number; the dashed line in its Fig. 2A measures 2.23 ± 0.03, matching the 2.2224 of the lab's analysis
+    code used by the PIEZO1 preset. They analysed trajectories of at least 20 s (“a minimum of 200 positions”, p. 4459).
+    <b>Mobile</b> when sRg &gt; threshold, else
     immobile; tracks with fewer than the minimum number of points (default ${d.min_classify_length}) are <b>too short</b> and not
     classified, because a short diffusing track has a small sRg (it grows about as √(N/3)).</p>
   <div class="scroll"><table class="tbl"><thead><tr><th>preset</th><th>mobile above</th><th>classified from</th><th>where the numbers come from</th></tr></thead>

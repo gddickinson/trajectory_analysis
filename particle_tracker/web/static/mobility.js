@@ -22,7 +22,7 @@ export const PRESETS = {
     "label": "PIEZO1-tdTomato, TIRF 10 fps (Pathak lab)",
     "mobility_threshold": 2.22236433588659,
     "min_classify_length": 200,
-    "basis": "threshold 2.2224 [Pathak-lab analysis code; Ly et al. 2025 define it as the 95th percentile of fixed-MEF sRg and plot it at ~2.2, but do not print the number]; minimum 200 points [source: Ly et al. 2025 analyse trajectories of >= 20 s at 10 fps]."
+    "basis": "threshold 2.2224 [Pathak-lab analysis code value. Ly et al. 2025 (Biophys J 124:4457; Methods 'Fixed-cell trajectory analysis', p. 4459; Eq. 1 and Fig. 2A, p. 4461) define the cutoff as the 95th percentile of sRg for a TAMSD-selected set of fixed-MEF trajectories; the number is not printed; the Fig. 2A dashed line measures 2.23 +/- 0.03 against the axis ticks]; minimum 200 points [source: Ly et al. 2025, p. 4459: trajectories of at least 20 s at 10 fps, 'a minimum of 200 positions per trajectory']."
   },
   "fixed_reference_strict": {
     "label": "Immobile / fixed reference, strict (1 % false mobile)",

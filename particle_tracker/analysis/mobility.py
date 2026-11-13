@@ -9,10 +9,20 @@ Sources (DOIs checked on Crossref, 2026-11-12):
   Trajectories shorter than 50 frames were discarded (85 fps).
 - Ly AT, Freites JA, Bertaccini GA, Evans EL, Dickinson GD, Tobias DJ, Pathak MM (2025) Single-particle tracking
   reveals heterogeneous PIEZO1 diffusion. Biophys J 124, 4457-4470. doi:10.1016/j.bpj.2025.01.010.
-  Eq. 1: sRg = sqrt(pi/2) Rg / <r>; threshold = 95th percentile of fixed-MEF sRg (number not printed in the paper;
-  the dashed line in Fig. 2A sits at about 2.2). Trajectories of at least 200 positions (20 s at 10 fps).
-  The value 2.22236433588659 comes from the Pathak-lab analysis code (particle_trajectory_analyzer config,
-  adapted from J. A. Freites' R code); its derivation is not printed anywhere we could find.
+  Definition (Results, p. 4461, Eq. 1): sRg = sqrt(pi/2) Rg / <r>, Rg = sqrt((1/N) sum |x_i - <x>|^2),
+  <r> = (1/(N-1)) sum_{i<N} |x_{i+1} - x_i| -- the same as track_srg below for a track without gaps.
+  Threshold (Materials and methods, "Fixed-cell trajectory analysis", p. 4459; Results p. 4461; Fig. 2A legend):
+  "the 95th percentile of a selected set of fixed-cell trajectories sRg distribution", the fixed-cell set being
+  PFA-fixed MEF trajectories kept by two mixture-model selections on a power-law fit to their TAMSD (lags 2-4):
+  the lower-alpha Gaussian component, then the lower-K_alpha kernel component. The number is not printed (text,
+  legends, methods); the dashed line in Fig. 2A reads 2.23 +/- 0.03 when measured against the axis ticks, which
+  matches the Pathak-lab code value 2.22236433588659 (particle_trajectory_analyzer config, adapted from
+  J. A. Freites' R code). The paper does not give the derivation beyond the percentile rule above.
+  Length: trajectories "at least 20 s in length, which at a frame rate of 100 ms resulted in a minimum of 200
+  positions per trajectory" ("PIEZO1-tdTomato trajectory generation", p. 4459). Not reproduced here: skipped frames
+  were filled with NaN placeholders (same section; the paper does not say how such steps enter <r>), and live-cell
+  trajectories with TAMSD below the localisation-error estimate were removed first ("Live-cell trajectory
+  analysis", pp. 4459-4460). Full notes: docs/srg_calibration.md, section 5.
 
 Calibration of every default here: scripts/srg_calibration.py -> docs/srg_calibration.md (seeded simulations).
 
@@ -49,9 +59,12 @@ PRESETS = {
     "piezo1_tirf_10fps": {
         "label": "PIEZO1-tdTomato, TIRF 10 fps (Pathak lab)",
         "mobility_threshold": 2.22236433588659, "min_classify_length": 200,
-        "basis": "threshold 2.2224 [Pathak-lab analysis code; Ly et al. 2025 define it as the 95th percentile of "
-                 "fixed-MEF sRg and plot it at ~2.2, but do not print the number]; minimum 200 points [source: "
-                 "Ly et al. 2025 analyse trajectories of >= 20 s at 10 fps].",
+        "basis": "threshold 2.2224 [Pathak-lab analysis code value. Ly et al. 2025 (Biophys J 124:4457; Methods "
+                 "'Fixed-cell trajectory analysis', p. 4459; Eq. 1 and Fig. 2A, p. 4461) define the cutoff as the "
+                 "95th percentile of sRg for a TAMSD-selected set of fixed-MEF trajectories; the number is not "
+                 "printed; the Fig. 2A dashed line measures 2.23 +/- 0.03 against the axis ticks]; minimum 200 "
+                 "points [source: Ly et al. 2025, p. 4459: trajectories of at least 20 s at 10 fps, 'a minimum of "
+                 "200 positions per trajectory'].",
     },
     "fixed_reference_strict": {
         "label": "Immobile / fixed reference, strict (1 % false mobile)",
